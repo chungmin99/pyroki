@@ -1,6 +1,8 @@
 PyRoki
 ==========
 
+`Project page <https://pyroki-toolkit.github.io/>`_ `•` `arXiv <https://arxiv.org/abs/2505.03728>`_ `•` `Code <https://github.com/chungmin99/pyroki>`_
+
 **PyRoki** is a library for robot kinematic optimization (Python Robot Kinematics).
 
 1. **Modular**: Optimization variables and cost functions are decoupled, enabling reusable components across tasks. Objectives like collision avoidance and pose matching can be applied to both IK and trajectory optimization without reimplementation.
