@@ -7,7 +7,7 @@ Online Planning
 
 Run online planning in collision aware environments.
 
-All descriptions can be run by cloning the PyRoki repository, which includes the ``pyroki_snippets`` implementation details.
+All examples can be run by first cloning the PyRoki repository, which includes the ``pyroki_snippets`` implementation details.
 
 
 

@@ -7,7 +7,7 @@ Bimanual IK
 
 Same as 01_basic_ik.py, but with two end effectors!
 
-All descriptions can be run by cloning the PyRoki repository, which includes the ``pyroki_snippets`` implementation details.
+All examples can be run by first cloning the PyRoki repository, which includes the ``pyroki_snippets`` implementation details.
 
 
 

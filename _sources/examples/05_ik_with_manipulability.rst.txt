@@ -7,7 +7,7 @@ IK with Manipulability
 
 Inverse Kinematics with Manipulability using PyRoKi.
 
-All descriptions can be run by cloning the PyRoki repository, which includes the ``pyroki_snippets`` implementation details.
+All examples can be run by first cloning the PyRoki repository, which includes the ``pyroki_snippets`` implementation details.
 
 
 

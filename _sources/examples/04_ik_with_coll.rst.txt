@@ -7,7 +7,7 @@ IK with Collision
 
 Basic Inverse Kinematics with Collision Avoidance using PyRoKi.
 
-All descriptions can be run by cloning the PyRoki repository, which includes the ``pyroki_snippets`` implementation details.
+All examples can be run by first cloning the PyRoki repository, which includes the ``pyroki_snippets`` implementation details.
 
 
 
