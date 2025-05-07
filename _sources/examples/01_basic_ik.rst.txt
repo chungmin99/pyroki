@@ -20,8 +20,8 @@ All examples can be run by first cloning the PyRoki repository, which includes t
         import numpy as np
         import pyroki as pk
         import viser
-        from pyroki.viewer import BatchedURDF
         from robot_descriptions.loaders.yourdfpy import load_robot_description
+        from viser.extras import ViserUrdf
 
         import pyroki_snippets as pks
 
@@ -38,7 +38,7 @@ All examples can be run by first cloning the PyRoki repository, which includes t
             # Set up visualizer.
             server = viser.ViserServer()
             server.scene.add_grid("/ground", width=2, height=2)
-            urdf_vis = BatchedURDF(server, urdf, root_node_name="/base")
+            urdf_vis = ViserUrdf(server, urdf, root_node_name="/base")
 
             # Create interactive controller with initial position.
             ik_target = server.scene.add_transform_controls(

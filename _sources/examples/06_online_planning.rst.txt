@@ -22,7 +22,7 @@ All examples can be run by first cloning the PyRoki repository, which includes t
 
         import pyroki as pk
         from pyroki.collision import HalfSpace, RobotCollision, Sphere
-        from pyroki.viewer import BatchedURDF
+        from viser.extras import ViserUrdf
         import pyroki_snippets as pks
 
 
@@ -46,7 +46,7 @@ All examples can be run by first cloning the PyRoki repository, which includes t
             # Set up visualizer.
             server = viser.ViserServer()
             server.scene.add_grid("/ground", width=2, height=2, cell_size=0.1)
-            urdf_vis = BatchedURDF(server, urdf, root_node_name="/robot")
+            urdf_vis = ViserUrdf(server, urdf, root_node_name="/robot")
 
             # Create interactive controller for IK target.
             ik_target_handle = server.scene.add_transform_controls(
@@ -106,12 +106,12 @@ All examples can be run by first cloning the PyRoki repository, which includes t
 
                 # Update the planned trajectory visualization.
                 if hasattr(target_frame_handle, "batched_positions"):
-                    target_frame_handle.batched_positions = np.array(sol_pos)
-                    target_frame_handle.batched_wxyzs = np.array(sol_wxyz)
+                    target_frame_handle.batched_positions = np.array(sol_pos)  # type: ignore[attr-defined]
+                    target_frame_handle.batched_wxyzs = np.array(sol_wxyz)  # type: ignore[attr-defined]
                 else:
                     # This is an older version of Viser.
-                    target_frame_handle.positions_batched = np.array(sol_pos)
-                    target_frame_handle.wxyzs_batched = np.array(sol_wxyz)
+                    target_frame_handle.positions_batched = np.array(sol_pos)  # type: ignore[attr-defined]
+                    target_frame_handle.wxyzs_batched = np.array(sol_wxyz)  # type: ignore[attr-defined]
 
 
         if __name__ == "__main__":

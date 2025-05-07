@@ -25,7 +25,7 @@ All examples can be run by first cloning the PyRoki repository, which includes t
         import trimesh
         import tyro
         import viser
-        from pyroki.viewer import BatchedURDF
+        from viser.extras import ViserUrdf
         from robot_descriptions.loaders.yourdfpy import load_robot_description
 
         import pyroki_snippets as pks
@@ -101,7 +101,7 @@ All examples can be run by first cloning the PyRoki repository, which includes t
 
             # Visualize!
             server = viser.ViserServer()
-            urdf_vis = BatchedURDF(server, urdf)
+            urdf_vis = ViserUrdf(server, urdf)
             server.scene.add_grid("/grid", width=2, height=2, cell_size=0.1)
             server.scene.add_mesh_trimesh(
                 "wall_box",

@@ -290,7 +290,7 @@
 <span class="linenos"> 5</span>
 <span class="linenos"> 6</span><span class="kn">import</span><span class="w"> </span><span class="nn">pyroki</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pk</span>
 <span class="linenos"> 7</span><span class="kn">from</span><span class="w"> </span><span class="nn">pyroki.collision</span><span class="w"> </span><span class="kn">import</span> <span class="n">HalfSpace</span><span class="p">,</span> <span class="n">RobotCollision</span><span class="p">,</span> <span class="n">Sphere</span>
-<span class="linenos"> 8</span><span class="kn">from</span><span class="w"> </span><span class="nn">pyroki.viewer</span><span class="w"> </span><span class="kn">import</span> <span class="n">BatchedURDF</span>
+<span class="linenos"> 8</span><span class="kn">from</span><span class="w"> </span><span class="nn">viser.extras</span><span class="w"> </span><span class="kn">import</span> <span class="n">ViserUrdf</span>
 <span class="linenos"> 9</span><span class="kn">import</span><span class="w"> </span><span class="nn">pyroki_snippets</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pks</span>
 <span class="linenos">10</span>
 <span class="linenos">11</span>
@@ -311,7 +311,7 @@
 <span class="linenos">26</span>    <span class="c1"># Set up visualizer.</span>
 <span class="linenos">27</span>    <span class="n">server</span> <span class="o">=</span> <span class="n">viser</span><span class="o">.</span><span class="n">ViserServer</span><span class="p">()</span>
 <span class="linenos">28</span>    <span class="n">server</span><span class="o">.</span><span class="n">scene</span><span class="o">.</span><span class="n">add_grid</span><span class="p">(</span><span class="s2">&quot;/ground&quot;</span><span class="p">,</span> <span class="n">width</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">height</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">cell_size</span><span class="o">=</span><span class="mf">0.1</span><span class="p">)</span>
-<span class="linenos">29</span>    <span class="n">urdf_vis</span> <span class="o">=</span> <span class="n">BatchedURDF</span><span class="p">(</span><span class="n">server</span><span class="p">,</span> <span class="n">urdf</span><span class="p">,</span> <span class="n">root_node_name</span><span class="o">=</span><span class="s2">&quot;/robot&quot;</span><span class="p">)</span>
+<span class="linenos">29</span>    <span class="n">urdf_vis</span> <span class="o">=</span> <span class="n">ViserUrdf</span><span class="p">(</span><span class="n">server</span><span class="p">,</span> <span class="n">urdf</span><span class="p">,</span> <span class="n">root_node_name</span><span class="o">=</span><span class="s2">&quot;/robot&quot;</span><span class="p">)</span>
 <span class="linenos">30</span>
 <span class="linenos">31</span>    <span class="c1"># Create interactive controller for IK target.</span>
 <span class="linenos">32</span>    <span class="n">ik_target_handle</span> <span class="o">=</span> <span class="n">server</span><span class="o">.</span><span class="n">scene</span><span class="o">.</span><span class="n">add_transform_controls</span><span class="p">(</span>
