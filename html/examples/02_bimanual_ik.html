@@ -3,14 +3,14 @@
   <head><meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width,initial-scale=1"/>
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
-<link rel="index" title="Index" href="../genindex.html" /><link rel="search" title="Search" href="../search.html" /><link rel="next" title="03_mobile_ik.py" href="03_mobile_ik.html" /><link rel="prev" title="01_basic_ik.py" href="01_basic_ik.html" />
+<link rel="index" title="Index" href="../genindex.html" /><link rel="search" title="Search" href="../search.html" /><link rel="next" title="Mobile IK" href="03_mobile_ik.html" /><link rel="prev" title="Basic IK" href="01_basic_ik.html" />
 
     <!-- Generated with Sphinx 8.0.2 and Furo 2024.08.06 -->
-        <title>02_bimanual_ik.py - pyroki</title>
-      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=80d5e7a1" />
+        <title>Bimanual IK - pyroki</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=354aac6f" />
     <link rel="stylesheet" type="text/css" href="../_static/css/custom.css?v=54b9a580" />
-    <link rel="stylesheet" type="text/css" href="../_static/ansi.css?v=7dca4c98" />
+    <link rel="stylesheet" type="text/css" href="../_static/ansi.css" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=302659d7" />
     
     
@@ -232,13 +232,13 @@
 <div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
   <p class="caption" role="heading"><span class="caption-text">Examples</span></p>
 <ul class="current">
-<li class="toctree-l1"><a class="reference internal" href="01_basic_ik.html">01_basic_ik.py</a></li>
-<li class="toctree-l1 current current-page"><a class="current reference internal" href="#">02_bimanual_ik.py</a></li>
-<li class="toctree-l1"><a class="reference internal" href="03_mobile_ik.html">03_mobile_ik.py</a></li>
-<li class="toctree-l1"><a class="reference internal" href="04_ik_with_coll.html">04_ik_with_coll.py</a></li>
-<li class="toctree-l1"><a class="reference internal" href="05_ik_with_manipulability.html">05_ik_with_manipulability.py</a></li>
-<li class="toctree-l1"><a class="reference internal" href="06_online_planning.html">06_online_planning.py</a></li>
-<li class="toctree-l1"><a class="reference internal" href="07_trajopt.html">07_trajopt.py</a></li>
+<li class="toctree-l1"><a class="reference internal" href="01_basic_ik.html">Basic IK</a></li>
+<li class="toctree-l1 current current-page"><a class="current reference internal" href="#">Bimanual IK</a></li>
+<li class="toctree-l1"><a class="reference internal" href="03_mobile_ik.html">Mobile IK</a></li>
+<li class="toctree-l1"><a class="reference internal" href="04_ik_with_coll.html">IK with Collision</a></li>
+<li class="toctree-l1"><a class="reference internal" href="05_ik_with_manipulability.html">IK with Manipulability</a></li>
+<li class="toctree-l1"><a class="reference internal" href="06_online_planning.html">Online Planning</a></li>
+<li class="toctree-l1"><a class="reference internal" href="07_trajopt.html">Trajectory Optimization</a></li>
 </ul>
 
 </div>
@@ -279,20 +279,21 @@
           </label>
         </div>
         <article role="main" id="furo-main-content">
-          <section id="bimanual-ik-py">
-<h1>02_bimanual_ik.py<a class="headerlink" href="#bimanual-ik-py" title="Link to this heading">¶</a></h1>
+          <section id="bimanual-ik">
+<h1>Bimanual IK<a class="headerlink" href="#bimanual-ik" title="Link to this heading">¶</a></h1>
 <p>Same as 01_basic_ik.py, but with two end effectors!</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="linenos"> 1</span><span class="kn">import</span> <span class="nn">time</span>
-<span class="linenos"> 2</span><span class="kn">import</span> <span class="nn">viser</span>
-<span class="linenos"> 3</span><span class="kn">from</span> <span class="nn">robot_descriptions.loaders.yourdfpy</span> <span class="kn">import</span> <span class="n">load_robot_description</span>
-<span class="linenos"> 4</span><span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<p>All examples can be run by first cloning the PyRoki repository, which includes the <code class="docutils literal notranslate"><span class="pre">pyroki_snippets</span></code> implementation details.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="linenos"> 1</span><span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
+<span class="linenos"> 2</span><span class="kn">import</span><span class="w"> </span><span class="nn">viser</span>
+<span class="linenos"> 3</span><span class="kn">from</span><span class="w"> </span><span class="nn">robot_descriptions.loaders.yourdfpy</span><span class="w"> </span><span class="kn">import</span> <span class="n">load_robot_description</span>
+<span class="linenos"> 4</span><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
 <span class="linenos"> 5</span>
-<span class="linenos"> 6</span><span class="kn">import</span> <span class="nn">pyroki</span> <span class="k">as</span> <span class="nn">pk</span>
-<span class="linenos"> 7</span><span class="kn">from</span> <span class="nn">pyroki.viewer</span> <span class="kn">import</span> <span class="n">BatchedURDF</span>
-<span class="linenos"> 8</span><span class="kn">import</span> <span class="nn">pyroki_snippets</span> <span class="k">as</span> <span class="nn">pks</span>
+<span class="linenos"> 6</span><span class="kn">import</span><span class="w"> </span><span class="nn">pyroki</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pk</span>
+<span class="linenos"> 7</span><span class="kn">from</span><span class="w"> </span><span class="nn">pyroki.viewer</span><span class="w"> </span><span class="kn">import</span> <span class="n">BatchedURDF</span>
+<span class="linenos"> 8</span><span class="kn">import</span><span class="w"> </span><span class="nn">pyroki_snippets</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pks</span>
 <span class="linenos"> 9</span>
 <span class="linenos">10</span>
-<span class="linenos">11</span><span class="k">def</span> <span class="nf">main</span><span class="p">():</span>
+<span class="linenos">11</span><span class="k">def</span><span class="w"> </span><span class="nf">main</span><span class="p">():</span>
 <span class="linenos">12</span><span class="w">    </span><span class="sd">&quot;&quot;&quot;Main function for bimanual IK.&quot;&quot;&quot;</span>
 <span class="linenos">13</span>
 <span class="linenos">14</span>    <span class="n">urdf</span> <span class="o">=</span> <span class="n">load_robot_description</span><span class="p">(</span><span class="s2">&quot;yumi_description&quot;</span><span class="p">)</span>
@@ -349,7 +350,7 @@
                 <div class="context">
                   <span>Next</span>
                 </div>
-                <div class="title">03_mobile_ik.py</div>
+                <div class="title">Mobile IK</div>
               </div>
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
             </a>
@@ -360,7 +361,7 @@
                   <span>Previous</span>
                 </div>
                 
-                <div class="title">01_basic_ik.py</div>
+                <div class="title">Basic IK</div>
                 
               </div>
             </a>

@@ -7,7 +7,7 @@
 
     <!-- Generated with Sphinx 8.0.2 and Furo 2024.08.06 -->
         <title>Hello, Inverse Kinematics - pyroki</title>
-      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=80d5e7a1" />
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=354aac6f" />
     <link rel="stylesheet" type="text/css" href="../_static/css/custom.css?v=54b9a580" />
     <link rel="stylesheet" type="text/css" href="../_static/ansi.css" />
@@ -232,12 +232,13 @@
 <div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
   <p class="caption" role="heading"><span class="caption-text">Examples</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="../examples/01_basic_ik.html">01_basic_ik.py</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../examples/02_bimanual_ik.html">02_bimanual_ik.py</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../examples/04_ik_with_coll.html">04_ik_with_coll.py</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../examples/05_ik_with_manipulability.html">07_ik_with_manipulability.py</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../examples/06_online_planning.html">06_online_planning.py</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../examples/07_trajopt.html">05_trajopt.py</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../examples/01_basic_ik.html">Basic IK</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../examples/02_bimanual_ik.html">Bimanual IK</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../examples/03_mobile_ik.html">Mobile IK</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../examples/04_ik_with_coll.html">IK with Collision</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../examples/05_ik_with_manipulability.html">IK with Manipulability</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../examples/06_online_planning.html">Online Planning</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../examples/07_trajopt.html">Trajectory Optimization</a></li>
 </ul>
 
 </div>
@@ -283,11 +284,11 @@
 <p>Let’s start with a “Hello World” example for PyRoki: solving the inverse kinematics (IK) problem for the Franka Panda robot arm (7 DoF).</p>
 <p>First, let’s load the robot.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Load the robot description.</span>
-<span class="kn">from</span> <span class="nn">robot_descriptions.loaders.yourdfpy</span> <span class="kn">import</span> <span class="n">load_robot_description</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">robot_descriptions.loaders.yourdfpy</span><span class="w"> </span><span class="kn">import</span> <span class="n">load_robot_description</span>
 <span class="n">urdf</span> <span class="o">=</span> <span class="n">load_robot_description</span><span class="p">(</span><span class="s2">&quot;panda_description&quot;</span><span class="p">)</span>
 
 <span class="c1"># Create the robot object.</span>
-<span class="kn">import</span> <span class="nn">pyroki</span> <span class="k">as</span> <span class="nn">pk</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">pyroki</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pk</span>
 <span class="n">robot</span> <span class="o">=</span> <span class="n">pk</span><span class="o">.</span><span class="n">Robot</span><span class="o">.</span><span class="n">from_urdf</span><span class="p">(</span><span class="n">urdf</span><span class="p">)</span>
 </pre></div>
 </div>
@@ -296,12 +297,12 @@
 <span class="n">end_effector_link</span> <span class="o">=</span> <span class="s2">&quot;panda_hand&quot;</span>
 <span class="k">assert</span> <span class="n">end_effector_link</span> <span class="ow">in</span> <span class="n">robot</span><span class="o">.</span><span class="n">links</span><span class="o">.</span><span class="n">names</span>
 
-<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
 <span class="n">target_position</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mf">0.7</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.5</span><span class="p">])</span>
 <span class="n">target_orientation_wxyz</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">])</span>  <span class="c1"># pointing downwards</span>
 
 <span class="c1"># Solve!</span>
-<span class="kn">import</span> <span class="nn">pyroki_snippets</span> <span class="k">as</span> <span class="nn">pks</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">pyroki_snippets</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pks</span>
 <span class="n">solution_cfg</span> <span class="o">=</span> <span class="n">pks</span><span class="o">.</span><span class="n">solve_ik</span><span class="p">(</span>
     <span class="n">robot</span><span class="o">=</span><span class="n">robot</span><span class="p">,</span>
     <span class="n">target_link_name</span><span class="o">=</span><span class="n">end_effector_link</span><span class="p">,</span>
@@ -320,7 +321,7 @@
 </pre></div>
 </div>
 <p>The two costs to optimize are: pose matching and joint limits.</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">jaxlie</span>  <span class="c1"># Library for Lie algebra operations.</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">jaxlie</span>  <span class="c1"># Library for Lie algebra operations.</span>
 
 <span class="n">target_link_index</span> <span class="o">=</span> <span class="n">robot</span><span class="o">.</span><span class="n">links</span><span class="o">.</span><span class="n">names</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="n">end_effector_link</span><span class="p">)</span>
 
@@ -344,7 +345,7 @@
 </pre></div>
 </div>
 <p>Then, we solve the IK problem defined by these variables and costs.</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">jaxls</span>  <span class="c1"># Library for nonlinear least-squares optimization.</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">jaxls</span>  <span class="c1"># Library for nonlinear least-squares optimization.</span>
 
 <span class="n">sol</span> <span class="o">=</span> <span class="p">(</span>
     <span class="n">jaxls</span><span class="o">.</span><span class="n">LeastSquaresProblem</span><span class="p">(</span><span class="n">factors</span><span class="p">,</span> <span class="p">[</span><span class="n">joint_var</span><span class="p">])</span>

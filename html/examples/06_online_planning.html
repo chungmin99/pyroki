@@ -3,14 +3,14 @@
   <head><meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width,initial-scale=1"/>
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
-<link rel="index" title="Index" href="../genindex.html" /><link rel="search" title="Search" href="../search.html" /><link rel="next" title="07_trajopt.py" href="07_trajopt.html" /><link rel="prev" title="05_ik_with_manipulability.py" href="05_ik_with_manipulability.html" />
+<link rel="index" title="Index" href="../genindex.html" /><link rel="search" title="Search" href="../search.html" /><link rel="next" title="Trajectory Optimization" href="07_trajopt.html" /><link rel="prev" title="IK with Manipulability" href="05_ik_with_manipulability.html" />
 
     <!-- Generated with Sphinx 8.0.2 and Furo 2024.08.06 -->
-        <title>06_online_planning.py - pyroki</title>
-      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=80d5e7a1" />
+        <title>Online Planning - pyroki</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=354aac6f" />
     <link rel="stylesheet" type="text/css" href="../_static/css/custom.css?v=54b9a580" />
-    <link rel="stylesheet" type="text/css" href="../_static/ansi.css?v=7dca4c98" />
+    <link rel="stylesheet" type="text/css" href="../_static/ansi.css" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=302659d7" />
     
     
@@ -232,13 +232,13 @@
 <div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
   <p class="caption" role="heading"><span class="caption-text">Examples</span></p>
 <ul class="current">
-<li class="toctree-l1"><a class="reference internal" href="01_basic_ik.html">01_basic_ik.py</a></li>
-<li class="toctree-l1"><a class="reference internal" href="02_bimanual_ik.html">02_bimanual_ik.py</a></li>
-<li class="toctree-l1"><a class="reference internal" href="03_mobile_ik.html">03_mobile_ik.py</a></li>
-<li class="toctree-l1"><a class="reference internal" href="04_ik_with_coll.html">04_ik_with_coll.py</a></li>
-<li class="toctree-l1"><a class="reference internal" href="05_ik_with_manipulability.html">05_ik_with_manipulability.py</a></li>
-<li class="toctree-l1 current current-page"><a class="current reference internal" href="#">06_online_planning.py</a></li>
-<li class="toctree-l1"><a class="reference internal" href="07_trajopt.html">07_trajopt.py</a></li>
+<li class="toctree-l1"><a class="reference internal" href="01_basic_ik.html">Basic IK</a></li>
+<li class="toctree-l1"><a class="reference internal" href="02_bimanual_ik.html">Bimanual IK</a></li>
+<li class="toctree-l1"><a class="reference internal" href="03_mobile_ik.html">Mobile IK</a></li>
+<li class="toctree-l1"><a class="reference internal" href="04_ik_with_coll.html">IK with Collision</a></li>
+<li class="toctree-l1"><a class="reference internal" href="05_ik_with_manipulability.html">IK with Manipulability</a></li>
+<li class="toctree-l1 current current-page"><a class="current reference internal" href="#">Online Planning</a></li>
+<li class="toctree-l1"><a class="reference internal" href="07_trajopt.html">Trajectory Optimization</a></li>
 </ul>
 
 </div>
@@ -279,105 +279,111 @@
           </label>
         </div>
         <article role="main" id="furo-main-content">
-          <section id="online-planning-py">
-<h1>06_online_planning.py<a class="headerlink" href="#online-planning-py" title="Link to this heading">¶</a></h1>
+          <section id="online-planning">
+<h1>Online Planning<a class="headerlink" href="#online-planning" title="Link to this heading">¶</a></h1>
 <p>Run online planning in collision aware environments.</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="linenos"> 1</span><span class="kn">import</span> <span class="nn">time</span>
-<span class="linenos"> 2</span><span class="kn">import</span> <span class="nn">viser</span>
-<span class="linenos"> 3</span><span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
-<span class="linenos"> 4</span><span class="kn">from</span> <span class="nn">robot_descriptions.loaders.yourdfpy</span> <span class="kn">import</span> <span class="n">load_robot_description</span>
-<span class="linenos"> 5</span>
-<span class="linenos"> 6</span><span class="kn">import</span> <span class="nn">pyroki</span> <span class="k">as</span> <span class="nn">pk</span>
-<span class="linenos"> 7</span><span class="kn">from</span> <span class="nn">pyroki.collision</span> <span class="kn">import</span> <span class="n">HalfSpace</span><span class="p">,</span> <span class="n">RobotCollision</span><span class="p">,</span> <span class="n">Sphere</span>
-<span class="linenos"> 8</span><span class="kn">from</span> <span class="nn">pyroki.viewer</span> <span class="kn">import</span> <span class="n">BatchedURDF</span>
-<span class="linenos"> 9</span><span class="kn">import</span> <span class="nn">pyroki_snippets</span> <span class="k">as</span> <span class="nn">pks</span>
-<span class="linenos">10</span>
-<span class="linenos">11</span>
-<span class="linenos">12</span><span class="k">def</span> <span class="nf">main</span><span class="p">():</span>
-<span class="linenos">13</span><span class="w">    </span><span class="sd">&quot;&quot;&quot;Main function for online planning with collision.&quot;&quot;&quot;</span>
-<span class="linenos">14</span>    <span class="n">urdf</span> <span class="o">=</span> <span class="n">load_robot_description</span><span class="p">(</span><span class="s2">&quot;panda_description&quot;</span><span class="p">)</span>
-<span class="linenos">15</span>    <span class="n">target_link_name</span> <span class="o">=</span> <span class="s2">&quot;panda_hand&quot;</span>
-<span class="linenos">16</span>    <span class="n">robot</span> <span class="o">=</span> <span class="n">pk</span><span class="o">.</span><span class="n">Robot</span><span class="o">.</span><span class="n">from_urdf</span><span class="p">(</span><span class="n">urdf</span><span class="p">)</span>
-<span class="linenos">17</span>
-<span class="linenos">18</span>    <span class="n">robot_coll</span> <span class="o">=</span> <span class="n">RobotCollision</span><span class="o">.</span><span class="n">from_urdf</span><span class="p">(</span><span class="n">urdf</span><span class="p">)</span>
-<span class="linenos">19</span>    <span class="n">plane_coll</span> <span class="o">=</span> <span class="n">HalfSpace</span><span class="o">.</span><span class="n">from_point_and_normal</span><span class="p">(</span>
-<span class="linenos">20</span>        <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">]),</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">])</span>
-<span class="linenos">21</span>    <span class="p">)</span>
-<span class="linenos">22</span>    <span class="n">sphere_coll</span> <span class="o">=</span> <span class="n">Sphere</span><span class="o">.</span><span class="n">from_center_and_radius</span><span class="p">(</span>
-<span class="linenos">23</span>        <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">]),</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mf">0.05</span><span class="p">])</span>
-<span class="linenos">24</span>    <span class="p">)</span>
-<span class="linenos">25</span>
-<span class="linenos">26</span>    <span class="c1"># Define the online planning parameters.</span>
-<span class="linenos">27</span>    <span class="n">len_traj</span><span class="p">,</span> <span class="n">dt</span> <span class="o">=</span> <span class="mi">5</span><span class="p">,</span> <span class="mf">0.1</span>
-<span class="linenos">28</span>
-<span class="linenos">29</span>    <span class="c1"># Set up visualizer.</span>
-<span class="linenos">30</span>    <span class="n">server</span> <span class="o">=</span> <span class="n">viser</span><span class="o">.</span><span class="n">ViserServer</span><span class="p">()</span>
-<span class="linenos">31</span>    <span class="n">server</span><span class="o">.</span><span class="n">scene</span><span class="o">.</span><span class="n">add_grid</span><span class="p">(</span><span class="s2">&quot;/ground&quot;</span><span class="p">,</span> <span class="n">width</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">height</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">cell_size</span><span class="o">=</span><span class="mf">0.1</span><span class="p">)</span>
-<span class="linenos">32</span>    <span class="n">urdf_vis</span> <span class="o">=</span> <span class="n">BatchedURDF</span><span class="p">(</span><span class="n">server</span><span class="p">,</span> <span class="n">urdf</span><span class="p">,</span> <span class="n">root_node_name</span><span class="o">=</span><span class="s2">&quot;/robot&quot;</span><span class="p">)</span>
-<span class="linenos">33</span>
-<span class="linenos">34</span>    <span class="c1"># Create interactive controller for IK target.</span>
-<span class="linenos">35</span>    <span class="n">ik_target_handle</span> <span class="o">=</span> <span class="n">server</span><span class="o">.</span><span class="n">scene</span><span class="o">.</span><span class="n">add_transform_controls</span><span class="p">(</span>
-<span class="linenos">36</span>        <span class="s2">&quot;/ik_target&quot;</span><span class="p">,</span> <span class="n">scale</span><span class="o">=</span><span class="mf">0.2</span><span class="p">,</span> <span class="n">position</span><span class="o">=</span><span class="p">(</span><span class="mf">0.3</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.5</span><span class="p">),</span> <span class="n">wxyz</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
-<span class="linenos">37</span>    <span class="p">)</span>
-<span class="linenos">38</span>
-<span class="linenos">39</span>    <span class="c1"># Create interactive controller and mesh for the sphere obstacle.</span>
-<span class="linenos">40</span>    <span class="n">sphere_handle</span> <span class="o">=</span> <span class="n">server</span><span class="o">.</span><span class="n">scene</span><span class="o">.</span><span class="n">add_transform_controls</span><span class="p">(</span>
-<span class="linenos">41</span>        <span class="s2">&quot;/obstacle&quot;</span><span class="p">,</span> <span class="n">scale</span><span class="o">=</span><span class="mf">0.2</span><span class="p">,</span> <span class="n">position</span><span class="o">=</span><span class="p">(</span><span class="mf">0.4</span><span class="p">,</span> <span class="mf">0.3</span><span class="p">,</span> <span class="mf">0.4</span><span class="p">)</span>
-<span class="linenos">42</span>    <span class="p">)</span>
-<span class="linenos">43</span>    <span class="n">server</span><span class="o">.</span><span class="n">scene</span><span class="o">.</span><span class="n">add_mesh_trimesh</span><span class="p">(</span><span class="s2">&quot;/obstacle/mesh&quot;</span><span class="p">,</span> <span class="n">mesh</span><span class="o">=</span><span class="n">sphere_coll</span><span class="o">.</span><span class="n">to_trimesh</span><span class="p">())</span>
-<span class="linenos">44</span>    <span class="n">target_frame_handle</span> <span class="o">=</span> <span class="n">server</span><span class="o">.</span><span class="n">scene</span><span class="o">.</span><span class="n">add_batched_axes</span><span class="p">(</span>
-<span class="linenos">45</span>        <span class="s2">&quot;target_frame&quot;</span><span class="p">,</span>
-<span class="linenos">46</span>        <span class="n">axes_length</span><span class="o">=</span><span class="mf">0.05</span><span class="p">,</span>
-<span class="linenos">47</span>        <span class="n">axes_radius</span><span class="o">=</span><span class="mf">0.005</span><span class="p">,</span>
-<span class="linenos">48</span>        <span class="n">batched_positions</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="mi">25</span><span class="p">,</span> <span class="mi">3</span><span class="p">)),</span>
-<span class="linenos">49</span>        <span class="n">batched_wxyzs</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([[</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">]]</span> <span class="o">*</span> <span class="mi">25</span><span class="p">),</span>
-<span class="linenos">50</span>    <span class="p">)</span>
-<span class="linenos">51</span>
-<span class="linenos">52</span>    <span class="n">timing_handle</span> <span class="o">=</span> <span class="n">server</span><span class="o">.</span><span class="n">gui</span><span class="o">.</span><span class="n">add_number</span><span class="p">(</span><span class="s2">&quot;Elapsed (ms)&quot;</span><span class="p">,</span> <span class="mf">0.001</span><span class="p">,</span> <span class="n">disabled</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-<span class="linenos">53</span>
-<span class="linenos">54</span>    <span class="n">sol_pos</span><span class="p">,</span> <span class="n">sol_wxyz</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="kc">None</span>
-<span class="linenos">55</span>    <span class="n">sol_traj</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span>
-<span class="linenos">56</span>        <span class="n">robot</span><span class="o">.</span><span class="n">joint_var_cls</span><span class="o">.</span><span class="n">default_factory</span><span class="p">()[</span><span class="kc">None</span><span class="p">]</span><span class="o">.</span><span class="n">repeat</span><span class="p">(</span><span class="n">len_traj</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
-<span class="linenos">57</span>    <span class="p">)</span>
-<span class="linenos">58</span>    <span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
-<span class="linenos">59</span>        <span class="n">start_time</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
-<span class="linenos">60</span>
-<span class="linenos">61</span>        <span class="n">sphere_coll_world_current</span> <span class="o">=</span> <span class="n">sphere_coll</span><span class="o">.</span><span class="n">transform_from_pos_wxyz</span><span class="p">(</span>
-<span class="linenos">62</span>            <span class="n">position</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">sphere_handle</span><span class="o">.</span><span class="n">position</span><span class="p">),</span>
-<span class="linenos">63</span>            <span class="n">wxyz</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">sphere_handle</span><span class="o">.</span><span class="n">wxyz</span><span class="p">),</span>
-<span class="linenos">64</span>        <span class="p">)</span>
-<span class="linenos">65</span>
-<span class="linenos">66</span>        <span class="n">world_coll_list</span> <span class="o">=</span> <span class="p">[</span><span class="n">plane_coll</span><span class="p">,</span> <span class="n">sphere_coll_world_current</span><span class="p">]</span>
-<span class="linenos">67</span>        <span class="n">sol_traj</span><span class="p">,</span> <span class="n">sol_pos</span><span class="p">,</span> <span class="n">sol_wxyz</span> <span class="o">=</span> <span class="n">pks</span><span class="o">.</span><span class="n">solve_online_planning</span><span class="p">(</span>
-<span class="linenos">68</span>            <span class="n">robot</span><span class="o">=</span><span class="n">robot</span><span class="p">,</span>
-<span class="linenos">69</span>            <span class="n">robot_coll</span><span class="o">=</span><span class="n">robot_coll</span><span class="p">,</span>
-<span class="linenos">70</span>            <span class="n">world_coll</span><span class="o">=</span><span class="n">world_coll_list</span><span class="p">,</span>
-<span class="linenos">71</span>            <span class="n">target_link_name</span><span class="o">=</span><span class="n">target_link_name</span><span class="p">,</span>
-<span class="linenos">72</span>            <span class="n">target_position</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">ik_target_handle</span><span class="o">.</span><span class="n">position</span><span class="p">),</span>
-<span class="linenos">73</span>            <span class="n">target_wxyz</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">ik_target_handle</span><span class="o">.</span><span class="n">wxyz</span><span class="p">),</span>
-<span class="linenos">74</span>            <span class="n">timesteps</span><span class="o">=</span><span class="n">len_traj</span><span class="p">,</span>
-<span class="linenos">75</span>            <span class="n">dt</span><span class="o">=</span><span class="n">dt</span><span class="p">,</span>
-<span class="linenos">76</span>            <span class="n">start_cfg</span><span class="o">=</span><span class="n">sol_traj</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span>
-<span class="linenos">77</span>            <span class="n">prev_sols</span><span class="o">=</span><span class="n">sol_traj</span><span class="p">,</span>
-<span class="linenos">78</span>        <span class="p">)</span>
-<span class="linenos">79</span>
-<span class="linenos">80</span>        <span class="c1"># Update timing handle.</span>
-<span class="linenos">81</span>        <span class="n">timing_handle</span><span class="o">.</span><span class="n">value</span> <span class="o">=</span> <span class="p">(</span>
-<span class="linenos">82</span>            <span class="mf">0.99</span> <span class="o">*</span> <span class="n">timing_handle</span><span class="o">.</span><span class="n">value</span> <span class="o">+</span> <span class="mf">0.01</span> <span class="o">*</span> <span class="p">(</span><span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="n">start_time</span><span class="p">)</span> <span class="o">*</span> <span class="mi">1000</span>
-<span class="linenos">83</span>        <span class="p">)</span>
-<span class="linenos">84</span>
-<span class="linenos">85</span>        <span class="c1"># Update visualizer.</span>
-<span class="linenos">86</span>        <span class="n">urdf_vis</span><span class="o">.</span><span class="n">update_cfg</span><span class="p">(</span>
-<span class="linenos">87</span>            <span class="n">sol_traj</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
-<span class="linenos">88</span>        <span class="p">)</span>  <span class="c1"># The first step of the online trajectory solution.</span>
-<span class="linenos">89</span>
-<span class="linenos">90</span>        <span class="c1"># Update the planned trajectory visualization.</span>
-<span class="linenos">91</span>        <span class="n">target_frame_handle</span><span class="o">.</span><span class="n">batched_positions</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">sol_pos</span><span class="p">)</span>
-<span class="linenos">92</span>        <span class="n">target_frame_handle</span><span class="o">.</span><span class="n">batched_wxyzs</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">sol_wxyz</span><span class="p">)</span>
-<span class="linenos">93</span>
-<span class="linenos">94</span>
-<span class="linenos">95</span><span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">&quot;__main__&quot;</span><span class="p">:</span>
-<span class="linenos">96</span>    <span class="n">main</span><span class="p">()</span>
+<p>All examples can be run by first cloning the PyRoki repository, which includes the <code class="docutils literal notranslate"><span class="pre">pyroki_snippets</span></code> implementation details.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="linenos">  1</span><span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
+<span class="linenos">  2</span><span class="kn">import</span><span class="w"> </span><span class="nn">viser</span>
+<span class="linenos">  3</span><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span class="linenos">  4</span><span class="kn">from</span><span class="w"> </span><span class="nn">robot_descriptions.loaders.yourdfpy</span><span class="w"> </span><span class="kn">import</span> <span class="n">load_robot_description</span>
+<span class="linenos">  5</span>
+<span class="linenos">  6</span><span class="kn">import</span><span class="w"> </span><span class="nn">pyroki</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pk</span>
+<span class="linenos">  7</span><span class="kn">from</span><span class="w"> </span><span class="nn">pyroki.collision</span><span class="w"> </span><span class="kn">import</span> <span class="n">HalfSpace</span><span class="p">,</span> <span class="n">RobotCollision</span><span class="p">,</span> <span class="n">Sphere</span>
+<span class="linenos">  8</span><span class="kn">from</span><span class="w"> </span><span class="nn">pyroki.viewer</span><span class="w"> </span><span class="kn">import</span> <span class="n">BatchedURDF</span>
+<span class="linenos">  9</span><span class="kn">import</span><span class="w"> </span><span class="nn">pyroki_snippets</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pks</span>
+<span class="linenos"> 10</span>
+<span class="linenos"> 11</span>
+<span class="linenos"> 12</span><span class="k">def</span><span class="w"> </span><span class="nf">main</span><span class="p">():</span>
+<span class="linenos"> 13</span><span class="w">    </span><span class="sd">&quot;&quot;&quot;Main function for online planning with collision.&quot;&quot;&quot;</span>
+<span class="linenos"> 14</span>    <span class="n">urdf</span> <span class="o">=</span> <span class="n">load_robot_description</span><span class="p">(</span><span class="s2">&quot;panda_description&quot;</span><span class="p">)</span>
+<span class="linenos"> 15</span>    <span class="n">target_link_name</span> <span class="o">=</span> <span class="s2">&quot;panda_hand&quot;</span>
+<span class="linenos"> 16</span>    <span class="n">robot</span> <span class="o">=</span> <span class="n">pk</span><span class="o">.</span><span class="n">Robot</span><span class="o">.</span><span class="n">from_urdf</span><span class="p">(</span><span class="n">urdf</span><span class="p">)</span>
+<span class="linenos"> 17</span>
+<span class="linenos"> 18</span>    <span class="n">robot_coll</span> <span class="o">=</span> <span class="n">RobotCollision</span><span class="o">.</span><span class="n">from_urdf</span><span class="p">(</span><span class="n">urdf</span><span class="p">)</span>
+<span class="linenos"> 19</span>    <span class="n">plane_coll</span> <span class="o">=</span> <span class="n">HalfSpace</span><span class="o">.</span><span class="n">from_point_and_normal</span><span class="p">(</span>
+<span class="linenos"> 20</span>        <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">]),</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">])</span>
+<span class="linenos"> 21</span>    <span class="p">)</span>
+<span class="linenos"> 22</span>    <span class="n">sphere_coll</span> <span class="o">=</span> <span class="n">Sphere</span><span class="o">.</span><span class="n">from_center_and_radius</span><span class="p">(</span>
+<span class="linenos"> 23</span>        <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">]),</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mf">0.05</span><span class="p">])</span>
+<span class="linenos"> 24</span>    <span class="p">)</span>
+<span class="linenos"> 25</span>
+<span class="linenos"> 26</span>    <span class="c1"># Define the online planning parameters.</span>
+<span class="linenos"> 27</span>    <span class="n">len_traj</span><span class="p">,</span> <span class="n">dt</span> <span class="o">=</span> <span class="mi">5</span><span class="p">,</span> <span class="mf">0.1</span>
+<span class="linenos"> 28</span>
+<span class="linenos"> 29</span>    <span class="c1"># Set up visualizer.</span>
+<span class="linenos"> 30</span>    <span class="n">server</span> <span class="o">=</span> <span class="n">viser</span><span class="o">.</span><span class="n">ViserServer</span><span class="p">()</span>
+<span class="linenos"> 31</span>    <span class="n">server</span><span class="o">.</span><span class="n">scene</span><span class="o">.</span><span class="n">add_grid</span><span class="p">(</span><span class="s2">&quot;/ground&quot;</span><span class="p">,</span> <span class="n">width</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">height</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">cell_size</span><span class="o">=</span><span class="mf">0.1</span><span class="p">)</span>
+<span class="linenos"> 32</span>    <span class="n">urdf_vis</span> <span class="o">=</span> <span class="n">BatchedURDF</span><span class="p">(</span><span class="n">server</span><span class="p">,</span> <span class="n">urdf</span><span class="p">,</span> <span class="n">root_node_name</span><span class="o">=</span><span class="s2">&quot;/robot&quot;</span><span class="p">)</span>
+<span class="linenos"> 33</span>
+<span class="linenos"> 34</span>    <span class="c1"># Create interactive controller for IK target.</span>
+<span class="linenos"> 35</span>    <span class="n">ik_target_handle</span> <span class="o">=</span> <span class="n">server</span><span class="o">.</span><span class="n">scene</span><span class="o">.</span><span class="n">add_transform_controls</span><span class="p">(</span>
+<span class="linenos"> 36</span>        <span class="s2">&quot;/ik_target&quot;</span><span class="p">,</span> <span class="n">scale</span><span class="o">=</span><span class="mf">0.2</span><span class="p">,</span> <span class="n">position</span><span class="o">=</span><span class="p">(</span><span class="mf">0.3</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.5</span><span class="p">),</span> <span class="n">wxyz</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+<span class="linenos"> 37</span>    <span class="p">)</span>
+<span class="linenos"> 38</span>
+<span class="linenos"> 39</span>    <span class="c1"># Create interactive controller and mesh for the sphere obstacle.</span>
+<span class="linenos"> 40</span>    <span class="n">sphere_handle</span> <span class="o">=</span> <span class="n">server</span><span class="o">.</span><span class="n">scene</span><span class="o">.</span><span class="n">add_transform_controls</span><span class="p">(</span>
+<span class="linenos"> 41</span>        <span class="s2">&quot;/obstacle&quot;</span><span class="p">,</span> <span class="n">scale</span><span class="o">=</span><span class="mf">0.2</span><span class="p">,</span> <span class="n">position</span><span class="o">=</span><span class="p">(</span><span class="mf">0.4</span><span class="p">,</span> <span class="mf">0.3</span><span class="p">,</span> <span class="mf">0.4</span><span class="p">)</span>
+<span class="linenos"> 42</span>    <span class="p">)</span>
+<span class="linenos"> 43</span>    <span class="n">server</span><span class="o">.</span><span class="n">scene</span><span class="o">.</span><span class="n">add_mesh_trimesh</span><span class="p">(</span><span class="s2">&quot;/obstacle/mesh&quot;</span><span class="p">,</span> <span class="n">mesh</span><span class="o">=</span><span class="n">sphere_coll</span><span class="o">.</span><span class="n">to_trimesh</span><span class="p">())</span>
+<span class="linenos"> 44</span>    <span class="n">target_frame_handle</span> <span class="o">=</span> <span class="n">server</span><span class="o">.</span><span class="n">scene</span><span class="o">.</span><span class="n">add_batched_axes</span><span class="p">(</span>
+<span class="linenos"> 45</span>        <span class="s2">&quot;target_frame&quot;</span><span class="p">,</span>
+<span class="linenos"> 46</span>        <span class="n">axes_length</span><span class="o">=</span><span class="mf">0.05</span><span class="p">,</span>
+<span class="linenos"> 47</span>        <span class="n">axes_radius</span><span class="o">=</span><span class="mf">0.005</span><span class="p">,</span>
+<span class="linenos"> 48</span>        <span class="n">batched_positions</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="mi">25</span><span class="p">,</span> <span class="mi">3</span><span class="p">)),</span>
+<span class="linenos"> 49</span>        <span class="n">batched_wxyzs</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([[</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">]]</span> <span class="o">*</span> <span class="mi">25</span><span class="p">),</span>
+<span class="linenos"> 50</span>    <span class="p">)</span>
+<span class="linenos"> 51</span>
+<span class="linenos"> 52</span>    <span class="n">timing_handle</span> <span class="o">=</span> <span class="n">server</span><span class="o">.</span><span class="n">gui</span><span class="o">.</span><span class="n">add_number</span><span class="p">(</span><span class="s2">&quot;Elapsed (ms)&quot;</span><span class="p">,</span> <span class="mf">0.001</span><span class="p">,</span> <span class="n">disabled</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="linenos"> 53</span>
+<span class="linenos"> 54</span>    <span class="n">sol_pos</span><span class="p">,</span> <span class="n">sol_wxyz</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="kc">None</span>
+<span class="linenos"> 55</span>    <span class="n">sol_traj</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span>
+<span class="linenos"> 56</span>        <span class="n">robot</span><span class="o">.</span><span class="n">joint_var_cls</span><span class="o">.</span><span class="n">default_factory</span><span class="p">()[</span><span class="kc">None</span><span class="p">]</span><span class="o">.</span><span class="n">repeat</span><span class="p">(</span><span class="n">len_traj</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+<span class="linenos"> 57</span>    <span class="p">)</span>
+<span class="linenos"> 58</span>    <span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
+<span class="linenos"> 59</span>        <span class="n">start_time</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+<span class="linenos"> 60</span>
+<span class="linenos"> 61</span>        <span class="n">sphere_coll_world_current</span> <span class="o">=</span> <span class="n">sphere_coll</span><span class="o">.</span><span class="n">transform_from_pos_wxyz</span><span class="p">(</span>
+<span class="linenos"> 62</span>            <span class="n">position</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">sphere_handle</span><span class="o">.</span><span class="n">position</span><span class="p">),</span>
+<span class="linenos"> 63</span>            <span class="n">wxyz</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">sphere_handle</span><span class="o">.</span><span class="n">wxyz</span><span class="p">),</span>
+<span class="linenos"> 64</span>        <span class="p">)</span>
+<span class="linenos"> 65</span>
+<span class="linenos"> 66</span>        <span class="n">world_coll_list</span> <span class="o">=</span> <span class="p">[</span><span class="n">plane_coll</span><span class="p">,</span> <span class="n">sphere_coll_world_current</span><span class="p">]</span>
+<span class="linenos"> 67</span>        <span class="n">sol_traj</span><span class="p">,</span> <span class="n">sol_pos</span><span class="p">,</span> <span class="n">sol_wxyz</span> <span class="o">=</span> <span class="n">pks</span><span class="o">.</span><span class="n">solve_online_planning</span><span class="p">(</span>
+<span class="linenos"> 68</span>            <span class="n">robot</span><span class="o">=</span><span class="n">robot</span><span class="p">,</span>
+<span class="linenos"> 69</span>            <span class="n">robot_coll</span><span class="o">=</span><span class="n">robot_coll</span><span class="p">,</span>
+<span class="linenos"> 70</span>            <span class="n">world_coll</span><span class="o">=</span><span class="n">world_coll_list</span><span class="p">,</span>
+<span class="linenos"> 71</span>            <span class="n">target_link_name</span><span class="o">=</span><span class="n">target_link_name</span><span class="p">,</span>
+<span class="linenos"> 72</span>            <span class="n">target_position</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">ik_target_handle</span><span class="o">.</span><span class="n">position</span><span class="p">),</span>
+<span class="linenos"> 73</span>            <span class="n">target_wxyz</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">ik_target_handle</span><span class="o">.</span><span class="n">wxyz</span><span class="p">),</span>
+<span class="linenos"> 74</span>            <span class="n">timesteps</span><span class="o">=</span><span class="n">len_traj</span><span class="p">,</span>
+<span class="linenos"> 75</span>            <span class="n">dt</span><span class="o">=</span><span class="n">dt</span><span class="p">,</span>
+<span class="linenos"> 76</span>            <span class="n">start_cfg</span><span class="o">=</span><span class="n">sol_traj</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span>
+<span class="linenos"> 77</span>            <span class="n">prev_sols</span><span class="o">=</span><span class="n">sol_traj</span><span class="p">,</span>
+<span class="linenos"> 78</span>        <span class="p">)</span>
+<span class="linenos"> 79</span>
+<span class="linenos"> 80</span>        <span class="c1"># Update timing handle.</span>
+<span class="linenos"> 81</span>        <span class="n">timing_handle</span><span class="o">.</span><span class="n">value</span> <span class="o">=</span> <span class="p">(</span>
+<span class="linenos"> 82</span>            <span class="mf">0.99</span> <span class="o">*</span> <span class="n">timing_handle</span><span class="o">.</span><span class="n">value</span> <span class="o">+</span> <span class="mf">0.01</span> <span class="o">*</span> <span class="p">(</span><span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="n">start_time</span><span class="p">)</span> <span class="o">*</span> <span class="mi">1000</span>
+<span class="linenos"> 83</span>        <span class="p">)</span>
+<span class="linenos"> 84</span>
+<span class="linenos"> 85</span>        <span class="c1"># Update visualizer.</span>
+<span class="linenos"> 86</span>        <span class="n">urdf_vis</span><span class="o">.</span><span class="n">update_cfg</span><span class="p">(</span>
+<span class="linenos"> 87</span>            <span class="n">sol_traj</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+<span class="linenos"> 88</span>        <span class="p">)</span>  <span class="c1"># The first step of the online trajectory solution.</span>
+<span class="linenos"> 89</span>
+<span class="linenos"> 90</span>        <span class="c1"># Update the planned trajectory visualization.</span>
+<span class="linenos"> 91</span>        <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">target_frame_handle</span><span class="p">,</span> <span class="s2">&quot;batched_positions&quot;</span><span class="p">):</span>
+<span class="linenos"> 92</span>            <span class="n">target_frame_handle</span><span class="o">.</span><span class="n">batched_positions</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">sol_pos</span><span class="p">)</span>
+<span class="linenos"> 93</span>            <span class="n">target_frame_handle</span><span class="o">.</span><span class="n">batched_wxyzs</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">sol_wxyz</span><span class="p">)</span>
+<span class="linenos"> 94</span>        <span class="k">else</span><span class="p">:</span>
+<span class="linenos"> 95</span>            <span class="c1"># This is an older version of Viser.</span>
+<span class="linenos"> 96</span>            <span class="n">target_frame_handle</span><span class="o">.</span><span class="n">positions_batched</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">sol_pos</span><span class="p">)</span>
+<span class="linenos"> 97</span>            <span class="n">target_frame_handle</span><span class="o">.</span><span class="n">wxyzs_batched</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">sol_wxyz</span><span class="p">)</span>
+<span class="linenos"> 98</span>
+<span class="linenos"> 99</span>
+<span class="linenos">100</span><span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">&quot;__main__&quot;</span><span class="p">:</span>
+<span class="linenos">101</span>    <span class="n">main</span><span class="p">()</span>
 </pre></div>
 </div>
 </section>
@@ -392,7 +398,7 @@
                 <div class="context">
                   <span>Next</span>
                 </div>
-                <div class="title">07_trajopt.py</div>
+                <div class="title">Trajectory Optimization</div>
               </div>
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
             </a>
@@ -403,7 +409,7 @@
                   <span>Previous</span>
                 </div>
                 
-                <div class="title">05_ik_with_manipulability.py</div>
+                <div class="title">IK with Manipulability</div>
                 
               </div>
             </a>

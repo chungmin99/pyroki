@@ -30,7 +30,9 @@ You can install ``pyroki`` with ``pip``, with Python 3.12+:
 
 .. code-block:: bash
 
-   pip install "git+https://github.com/chungmin99/pyroki.git[examples]"
+   git clone https://github.com/chungmin99/pyroki.git
+   cd pyroki
+   pip install -e .
 
 
 Examples

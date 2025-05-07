@@ -7,7 +7,7 @@
 
     <!-- Generated with Sphinx 8.0.2 and Furo 2024.08.06 -->
         <title>Trajectory Optimization - pyroki</title>
-      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=80d5e7a1" />
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=354aac6f" />
     <link rel="stylesheet" type="text/css" href="../_static/css/custom.css?v=54b9a580" />
     <link rel="stylesheet" type="text/css" href="../_static/ansi.css" />
@@ -232,12 +232,13 @@
 <div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
   <p class="caption" role="heading"><span class="caption-text">Examples</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="../examples/01_basic_ik.html">01_basic_ik.py</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../examples/02_bimanual_ik.html">02_bimanual_ik.py</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../examples/04_ik_with_coll.html">04_ik_with_coll.py</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../examples/05_ik_with_manipulability.html">07_ik_with_manipulability.py</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../examples/06_online_planning.html">06_online_planning.py</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../examples/07_trajopt.html">05_trajopt.py</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../examples/01_basic_ik.html">Basic IK</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../examples/02_bimanual_ik.html">Bimanual IK</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../examples/03_mobile_ik.html">Mobile IK</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../examples/04_ik_with_coll.html">IK with Collision</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../examples/05_ik_with_manipulability.html">IK with Manipulability</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../examples/06_online_planning.html">Online Planning</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../examples/07_trajopt.html">Trajectory Optimization</a></li>
 </ul>
 
 </div>
@@ -295,7 +296,7 @@
 <p>The indexing notation supports both integers (<code class="docutils literal notranslate"><span class="pre">Var(0)</span></code>), or a sequence of integers (<code class="docutils literal notranslate"><span class="pre">Var(jnp.arange(N))</span></code>).</p>
 </div>
 <p>Then, the costs can take in this sequence of variables:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">jaxlie</span>  <span class="c1"># Library for Lie algebra operations.</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">jaxlie</span>  <span class="c1"># Library for Lie algebra operations.</span>
 
 <span class="n">target_link_index</span> <span class="o">=</span> <span class="n">robot</span><span class="o">.</span><span class="n">links</span><span class="o">.</span><span class="n">names</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="n">end_effector_link</span><span class="p">)</span>
 <span class="n">target_poses</span> <span class="o">=</span> <span class="n">jaxlie</span><span class="o">.</span><span class="n">SE3</span><span class="o">.</span><span class="n">from_rotation_and_translation</span><span class="p">(</span>

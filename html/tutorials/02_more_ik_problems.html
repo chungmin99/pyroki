@@ -7,7 +7,7 @@
 
     <!-- Generated with Sphinx 8.0.2 and Furo 2024.08.06 -->
         <title>Diving Deeper into IK - pyroki</title>
-      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=80d5e7a1" />
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=354aac6f" />
     <link rel="stylesheet" type="text/css" href="../_static/css/custom.css?v=54b9a580" />
     <link rel="stylesheet" type="text/css" href="../_static/ansi.css" />
@@ -232,12 +232,13 @@
 <div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
   <p class="caption" role="heading"><span class="caption-text">Examples</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="../examples/01_basic_ik.html">01_basic_ik.py</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../examples/02_bimanual_ik.html">02_bimanual_ik.py</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../examples/04_ik_with_coll.html">04_ik_with_coll.py</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../examples/05_ik_with_manipulability.html">07_ik_with_manipulability.py</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../examples/06_online_planning.html">06_online_planning.py</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../examples/07_trajopt.html">05_trajopt.py</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../examples/01_basic_ik.html">Basic IK</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../examples/02_bimanual_ik.html">Bimanual IK</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../examples/03_mobile_ik.html">Mobile IK</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../examples/04_ik_with_coll.html">IK with Collision</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../examples/05_ik_with_manipulability.html">IK with Manipulability</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../examples/06_online_planning.html">Online Planning</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../examples/07_trajopt.html">Trajectory Optimization</a></li>
 </ul>
 
 </div>
@@ -452,7 +453,7 @@ by maximizing the Yoshikawa manipulability index for the specified end-effector!
 </div>
 <p>The manipulability cost here <code class="xref py py-func docutils literal notranslate"><span class="pre">pk.costs.manipulability_cost()</span></code> is equivalent to:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@pk</span><span class="o">.</span><span class="n">Cost</span><span class="o">.</span><span class="n">create_factory</span>
-<span class="k">def</span> <span class="nf">manipulability_cost</span><span class="p">(</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">manipulability_cost</span><span class="p">(</span>
     <span class="n">vals</span><span class="p">:</span> <span class="n">jaxls</span><span class="o">.</span><span class="n">VarValues</span><span class="p">,</span>
     <span class="n">robot</span><span class="p">:</span> <span class="n">pk</span><span class="o">.</span><span class="n">Robot</span><span class="p">,</span>
     <span class="n">joint_var</span><span class="p">:</span> <span class="n">jaxls</span><span class="o">.</span><span class="n">Var</span><span class="p">[</span><span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">],</span>
