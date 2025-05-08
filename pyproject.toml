@@ -27,6 +27,7 @@ dependencies = [
     "yourdfpy",
     "trimesh",
     "viser",
+    "pyliblzfse",
 ]
 
 [project.optional-dependencies]
