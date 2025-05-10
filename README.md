@@ -11,7 +11,7 @@ Core features include:
 - Differentiable collision bodies with numpy broadcasting logic.
 - Common cost implementations (e.g., end effector pose, self/world-collision, manipulability).
 - Arbitrary costs, autodiff or analytical Jacobians.
-- Integration with a [Levenberg-Marquardt Solver](https://github.com/brentyi/jaxls).
+- Integration with a [Levenberg-Marquardt Solver](https://github.com/brentyi/jaxls) that supports optimization on manifolds (e.g., [lie groups](https://github.com/brentyi/jaxlie))
 - Cross-platform support (CPU, GPU, TPU).
 
 Please refer to the [documentation](https://chungmin99.github.io/pyroki/) for more details, features, and usage examples.
