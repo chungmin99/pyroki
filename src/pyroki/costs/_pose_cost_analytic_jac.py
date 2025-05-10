@@ -19,21 +19,47 @@ def _get_actuated_joints_applied_to_target(
     the target link.
     """
 
-    def scan_fn(current_parent_idx: jax.Array, i: jax.Array):
-        # Check if this joint is in the path to the target
-        is_in_path = i == current_parent_idx
-        act_joint_idx = jnp.where(is_in_path, robot.joints.actuated_indices[..., i], -1)
-        current_parent_idx = jnp.where(
-            is_in_path, robot.joints.parent_indices[..., i], current_parent_idx
+    def body_fun(joint, indices):
+        # Find the corresponding active actuated joint;
+        # It may be the case that either:
+        #  - the current joint is actuated, or
+        #  - is mimicking another joint.
+        active_act_joint = jnp.where(
+            robot.joints.actuated_indices[joint] != -1,
+            robot.joints.actuated_indices[joint],
+            jnp.where(
+                robot.joints.mimic_act_indices[joint] != -1,
+                robot.joints.mimic_act_indices[joint],
+                -1,
+            ),
         )
-        return current_parent_idx, act_joint_idx
 
-    return jax.lax.scan(
-        scan_fn,
-        init=target_joint_idx,
-        xs=jnp.arange(robot.joints.num_joints),
-        reverse=True,
-    )[1]
+        # Find the parent of the current joint.
+        parent_joint = robot.joints.parent_indices[joint]
+
+        # Continue traversing up the kinematic tree, using the parent joint.
+        # Note that this value may either go up or down, since there's no
+        # guarantee that the kinematic tree is topologically sorted. :-)
+        next_indices = jnp.put_along_axis(
+            indices,
+            joint[..., None],
+            active_act_joint[..., None],
+            axis=-1,
+            inplace=False,
+        )
+        return (parent_joint, next_indices)
+
+    idx_applied_to_target = jnp.full(
+        (robot.joints.num_joints,),
+        fill_value=-1,
+        dtype=jnp.int32,
+    )
+    idx_applied_to_target = jax.lax.while_loop(
+        lambda carry: jnp.any(carry[0] >= 0),
+        lambda carry: body_fun(*carry),
+        (target_joint_idx, idx_applied_to_target),
+    )[-1]
+    return idx_applied_to_target
 
 
 _PoseCostJacCache = tuple[jax.Array, jax.Array, jaxlie.SE3]
@@ -154,11 +180,18 @@ def _pose_cost_jac(
     ).T
     jac = pose_error.jlog() @ jac
 
-    # TODO: @cmk I don't really know how to correctly use these 🥲
-    #
-    # this indexing/slicing here works for Panda but I'm not sure how to
-    # make this generalize
-    jac = jac[:, robot.joints.actuated_indices][:, : robot.joints.num_actuated_joints]
+    # Combine along actuated joints.
+    # TODO: Is there a way to do this without the for-loop?
+    act_jac = jnp.zeros((6, robot.joints.num_actuated_joints))
+    for i in range(robot.joints.num_joints):
+        act_jac = act_jac.at[:, joints_applied_to_target[i]].add(
+            jnp.where(
+                joints_applied_to_target[i] != -1,
+                jac[:, i],
+                0.0,
+            )
+        )
+    jac = act_jac
 
     # Apply weights
     weights = jnp.array([pos_weight] * 3 + [ori_weight] * 3)
