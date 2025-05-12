@@ -181,17 +181,11 @@ def _pose_cost_jac(
     jac = pose_error.jlog() @ jac
 
     # Combine along actuated joints.
-    # TODO: Is there a way to do this without the for-loop?
-    act_jac = jnp.zeros((6, robot.joints.num_actuated_joints))
-    for i in range(robot.joints.num_joints):
-        act_jac = act_jac.at[:, joints_applied_to_target[i]].add(
-            jnp.where(
-                joints_applied_to_target[i] != -1,
-                jac[:, i],
-                0.0,
-            )
-        )
-    jac = act_jac
+    jac = (
+        jnp.zeros((6, robot.joints.num_actuated_joints + 1))
+        .at[:, joints_applied_to_target]
+        .add(jac)
+    )[..., :-1]
 
     # Apply weights
     weights = jnp.array([pos_weight] * 3 + [ori_weight] * 3)
