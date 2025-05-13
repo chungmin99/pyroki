@@ -177,18 +177,13 @@ def _pose_cost_jac(
 
     # Jacobian of all joints => Jacobian of actuated joints.
     #
-    # 1) Because of mimic joints, the Jacobian terms from multiple joints can
-    # be applied to a single actuated joint. This is summed!
-    #
-    # 2) To handle joints that aren't on the path to the target link, we introduce
-    # a sink column to the Jacobian matrix. This absorbs all joints where
-    # `joints_applied_to_target[i]` is -1. This isn't actually used, so we slice
-    # it off at the end.
+    # Because of mimic joints, the Jacobian terms from multiple joints can be
+    # applied to a single actuated joint. This is summed!
     jac = (
-        jnp.zeros((6, robot.joints.num_actuated_joints + 1))
+        jnp.zeros((6, robot.joints.num_actuated_joints))
         .at[:, joints_applied_to_target]
-        .add(jac)
-    )[:, :-1]
+        .add((joints_applied_to_target[None, :] != -1) * jac)
+    )
 
     # Apply weights
     weights = jnp.array([pos_weight] * 3 + [ori_weight] * 3)
