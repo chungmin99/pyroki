@@ -154,11 +154,20 @@ def _pose_cost_jac(
     ).T
     jac = pose_error.jlog() @ jac
 
-    # TODO: @cmk I don't really know how to correctly use these 🥲
-    #
-    # this indexing/slicing here works for Panda but I'm not sure how to
-    # make this generalize
-    jac = jac[:, robot.joints.actuated_indices][:, : robot.joints.num_actuated_joints]
+    # Fixed‑size list of kinematic joints that are actually actuated
+    kin_idx = jnp.nonzero(robot.joints.actuated_indices != -1,
+                          size=robot.joints.actuated_indices.size,
+                          fill_value=0)[0] # (num_joints,)
+
+    # Map each kept joint → its actuator id (may repeat for mimic joints)
+    act_idx = robot.joints.actuated_indices[kin_idx] # (num_joints,)
+
+    # Scatter‑add merges mimic joints into their single actuator column
+    jac = (
+        jnp.zeros((6, robot.joints.num_actuated_joints), jac.dtype)
+          .at[:, act_idx]
+          .add(jac[:, kin_idx])
+    )
 
     # Apply weights
     weights = jnp.array([pos_weight] * 3 + [ori_weight] * 3)
