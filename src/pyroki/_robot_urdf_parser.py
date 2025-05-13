@@ -8,7 +8,7 @@ import numpy as onp
 import yourdfpy
 from jax import Array
 from jax import numpy as jnp
-from jaxtyping import Bool, Float, Int
+from jaxtyping import Float, Int
 from loguru import logger
 
 
