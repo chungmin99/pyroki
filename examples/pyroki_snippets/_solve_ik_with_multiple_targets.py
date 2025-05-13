@@ -72,6 +72,11 @@ def _solve_ik_jax(
             pos_weight=50.0,
             ori_weight=10.0,
         ),
+        pk.costs.rest_cost(
+            JointVar(0),
+            rest_pose=JointVar.default_factory(),
+            weight=1.0,
+        ),
         pk.costs.limit_cost(
             robot,
             JointVar(0),
@@ -84,7 +89,7 @@ def _solve_ik_jax(
         .solve(
             verbose=False,
             linear_solver="dense_cholesky",
-            trust_region=jaxls.TrustRegionConfig(lambda_initial=1.0),
+            trust_region=jaxls.TrustRegionConfig(lambda_initial=10.0),
         )
     )
     return sol[JointVar(0)]
