@@ -139,19 +139,19 @@ def _pose_cost_jac(
 
     R_ee_world = T_world_ee.rotation().inverse()
 
-    # Get joint twists
-    joint_twists = robot.joints.twists
+    # Get joint twists; these are scaled for mimic joints.
+    joint_twists = robot.joints.twists * robot.joints.mimic_multiplier[..., None]
 
-    # Get angular velocity components (omega)
+    # Get angular velocity components (omega).
     omega_local = joint_twists[:, 3:]
     omega_wrt_world = Ts_world_joint.rotation() @ omega_local
     omega_wrt_ee = R_ee_world @ omega_wrt_world
 
-    # Get linear velocity components (v)
+    # Get linear velocity components (v).
     vel_local = joint_twists[:, :3]
     vel_wrt_world = Ts_world_joint.rotation() @ vel_local
 
-    # Compute the linear velocity component (v = ω × r + v_joint)
+    # Compute the linear velocity component (v = ω × r + v_joint).
     vel_wrt_world = (
         jnp.cross(
             omega_wrt_world,
@@ -161,7 +161,7 @@ def _pose_cost_jac(
     )
     vel_wrt_ee = R_ee_world @ vel_wrt_world
 
-    # Combine into spatial jacobian
+    # Combine into spatial Jacobian.
     jac = jnp.where(
         joints_applied_to_target[:, None] != -1,
         jnp.concatenate(

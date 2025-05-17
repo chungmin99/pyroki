@@ -49,9 +49,9 @@ class JointInfo:
 
     # Mimic joint parameters.
     mimic_multiplier: Float[Array, " n_joints"]
-    """Mimic multiplier for each joint. Shape: (n_joints,)."""
+    """Mimic multiplier for each joint. Shape: (n_joints,). 1.0 if not a mimic joint."""
     mimic_offset: Float[Array, " n_joints"]
-    """Mimic offset for each joint. Shape: (n_joints,)."""
+    """Mimic offset for each joint. Shape: (n_joints,). 0 if not a mimic joint."""
     mimic_act_indices: Int[Array, " n_joints"]
     """Index of the actuated joint that is mimicked by each joint. -1 if not a mimic joint. Shape: (n_joints,)."""
 
