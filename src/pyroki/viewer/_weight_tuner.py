@@ -1,11 +1,14 @@
 """Provides a class for interactively tuning named weights using Viser GUIs."""
 
-from typing import Dict, Type, Mapping, cast
-import viser
+from __future__ import annotations
+
+from typing import cast
+
 import jax
+import viser
 
 
-class WeightTuner[T: Mapping[str, object]]:  # TypedDict is a Mapping[str, object].
+class WeightTuner:
     """Creates and manages a set of Viser GUI sliders for tuning named weights.
 
     This class simplifies the process of adding interactive controls to a Viser
@@ -15,24 +18,22 @@ class WeightTuner[T: Mapping[str, object]]:  # TypedDict is a Mapping[str, objec
     """
 
     _server: viser.ViserServer
-    _weight_handles: Dict[str, viser.GuiSliderHandle]
+    _weight_handles: dict[str, viser.GuiSliderHandle]
 
-    _weight_class: Type[T]
-
-    _min: T
-    _max: T
-    _step: T
-    _default: T
+    _min: dict[str, float]
+    _max: dict[str, float]
+    _step: dict[str, float]
+    _default: dict[str, float]
 
     def __init__(
         self,
         server: viser.ViserServer,
-        default: T,
+        default: dict[str, float],
         *,
         folder_name: str = "Costs",
-        min: T | None = None,
-        max: T | None = None,
-        step: T | None = None,
+        min: dict[str, float] | None = None,
+        max: dict[str, float] | None = None,
+        step: dict[str, float] | None = None,
         default_min: float = 0.0,
         default_max: float = 100.0,
         default_step: float = 0.01,
@@ -60,8 +61,6 @@ class WeightTuner[T: Mapping[str, object]]:  # TypedDict is a Mapping[str, objec
 
         self._server = server
         self._weight_handles = {}
-        self._weight_class = cast(Type[T], type(default))
-
         self._max = jax.tree.map(lambda _: default_max, default)
         if max is not None:
             for key, max_val in max.items():
@@ -80,37 +79,32 @@ class WeightTuner[T: Mapping[str, object]]:  # TypedDict is a Mapping[str, objec
         self._default = default
 
         with server.gui.add_folder(folder_name):
-            for field in default.keys():
-                default_weight = default[field]
-                assert isinstance(default_weight, (int, float))
-
+            for field, default_weight in default.items():
                 self._weight_handles[field] = server.gui.add_slider(
                     field,
-                    min=cast(float, self._min[field]),
-                    max=cast(float, self._max[field]),
-                    step=cast(float, self._step[field]),
+                    min=self._min[field],
+                    max=self._max[field],
+                    step=self._step[field],
                     initial_value=default_weight,
                 )
 
             reset_button = server.gui.add_button("Reset Weights")
             reset_button.on_click(lambda _: self.reset_weights())
 
-    def get_weights(self) -> T:
+    def get_weights(self) -> dict[str, float]:
         """Retrieves the current values of all tracked weights from the GUI sliders.
 
         Returns:
             A dictionary mapping weight names to their current float values
             as set by the sliders.
         """
-        return self._weight_class(
-            **{
-                field: handle.value
-                for field, handle in zip(
-                    self._weight_handles.keys(),
-                    self._weight_handles.values(),
-                )
-            },
-        )
+        return {
+            field: handle.value
+            for field, handle in zip(
+                self._weight_handles.keys(),
+                self._weight_handles.values(),
+            )
+        }
 
     def reset_weights(self):
         """Resets all weights to their initial values."""

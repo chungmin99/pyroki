@@ -5,18 +5,18 @@ from typing import Callable, Dict, Tuple, cast
 import jax
 import jax.numpy as jnp
 import jax_dataclasses as jdc
-from jaxtyping import Float, Array
+from jaxtyping import Array, Float
 
-from ._geometry import CollGeom, HalfSpace, Sphere, Capsule, Heightmap
+from ._geometry import Capsule, CollGeom, HalfSpace, Heightmap, Sphere
 from ._geometry_pairs import (
-    halfspace_sphere,
-    halfspace_capsule,
-    sphere_sphere,
-    sphere_capsule,
     capsule_capsule,
-    heightmap_sphere,
+    halfspace_capsule,
+    halfspace_sphere,
     heightmap_capsule,
     heightmap_halfspace,
+    heightmap_sphere,
+    sphere_capsule,
+    sphere_sphere,
 )
 
 COLLISION_FUNCTIONS: Dict[
@@ -65,8 +65,8 @@ def collide(geom1: CollGeom, geom2: CollGeom) -> Float[Array, "*batch"]:
             f"Cannot broadcast geometry shapes {geom1.get_batch_axes()} and {geom2.get_batch_axes()}"
         ) from e
 
-    geom1_b = geom1.broadcast_to(*broadcast_shape)
-    geom2_b = geom2.broadcast_to(*broadcast_shape)
+    geom1_b = geom1.broadcast_to(broadcast_shape)
+    geom2_b = geom2.broadcast_to(broadcast_shape)
 
     geom1_cls = type(geom1)
     geom2_cls = type(geom2)
@@ -118,8 +118,12 @@ def pairwise_collide(geom1: CollGeom, geom2: CollGeom) -> Float[Array, "*batch N
     expected_output_shape = (*batch_combined_shape, N, M)
 
     result = jax.vmap(collide)(
-        geom1.reshape(*batch_combined_shape, N, 1).broadcast_to(*expected_output_shape),
-        geom2.reshape(*batch_combined_shape, 1, M).broadcast_to(*expected_output_shape),
+        geom1.reshape((*batch_combined_shape, N, 1)).broadcast_to(
+            expected_output_shape
+        ),
+        geom2.reshape((*batch_combined_shape, 1, M)).broadcast_to(
+            expected_output_shape
+        ),
     )
 
     assert result.shape == expected_output_shape, (

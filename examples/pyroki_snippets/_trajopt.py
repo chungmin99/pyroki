@@ -2,12 +2,12 @@ from typing import Sequence
 
 import jax
 import jax.numpy as jnp
+import jax_dataclasses as jdc
+import jaxlie
 import jaxls
 import numpy as onp
 import pyroki as pk
 from jax.typing import ArrayLike
-import jaxlie
-import jax_dataclasses as jdc
 
 
 def solve_trajopt(
@@ -77,7 +77,9 @@ def solve_trajopt(
         coll = robot_coll.get_swept_capsules(
             robot, vals[prev_traj_vars], vals[curr_traj_vars]
         )
-        dist = pk.collision.collide(coll.reshape(-1, 1), world_coll_obj.reshape(1, -1))
+        dist = pk.collision.collide(
+            coll.reshape((-1, 1)), world_coll_obj.reshape((1, -1))
+        )
         colldist = pk.collision.colldist_from_sdf(dist, 0.1)
         return (colldist * 20.0).flatten()
 
