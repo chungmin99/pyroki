@@ -217,6 +217,7 @@ def _solve_online_planning_jax(
             initial_vals=jaxls.VarValues.make(
                 (traj_var.with_value(prev_sols), pose_var.with_value(init_pose_vals))
             ),
+            termination=jaxls.TerminationConfig(max_iterations=20),
         )
     )
     pose_traj = solution[pose_var]

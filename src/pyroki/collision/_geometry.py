@@ -38,10 +38,10 @@ class CollGeom(abc.ABC):
         )
 
     def broadcast_to(self, shape: tuple[int, ...]) -> Self:
-        """Broadcast geometry to given shape."""
+        """Broadcast geometry with given batch axes."""
         return jax.tree.map(
             lambda x: jnp.broadcast_to(
-                x, shape + getattr(x, "shape", ())[len(shape) :]
+                x, shape + getattr(x, "shape", ())[len(self.pose.get_batch_axes()) :]
             ),
             self,
         )
@@ -49,7 +49,9 @@ class CollGeom(abc.ABC):
     def reshape(self, shape: tuple[int, ...]) -> Self:
         """Reshape geometry to given shape."""
         return jax.tree.map(
-            lambda x: x.reshape(shape + getattr(x, "shape", ())[len(shape) :]),
+            lambda x: x.reshape(
+                shape + getattr(x, "shape", ())[len(self.pose.get_batch_axes()) :]
+            ),
             self,
         )
 
