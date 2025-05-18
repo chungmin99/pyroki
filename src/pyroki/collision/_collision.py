@@ -118,8 +118,8 @@ def pairwise_collide(geom1: CollGeom, geom2: CollGeom) -> Float[Array, "*batch N
     expected_output_shape = (*batch_combined_shape, N, M)
 
     result = jax.vmap(collide)(
-        geom1.broadcast_to(*expected_output_shape),
-        geom2.broadcast_to(*expected_output_shape),
+        geom1.reshape(*batch_combined_shape, N, 1).broadcast_to(*expected_output_shape),
+        geom2.reshape(*batch_combined_shape, 1, M).broadcast_to(*expected_output_shape),
     )
 
     assert result.shape == expected_output_shape, (
