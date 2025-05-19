@@ -37,7 +37,7 @@ _May 6, 2025_: Initial release
 
 We are preparing and will release by _May 16, 2025_:
 
-- [ ] Examples + documentation for hand / humanoid motion retargeting
+- [x] Examples + documentation for hand / humanoid motion retargeting
 - [ ] Documentation for using manually defined Jacobians.
 - [x] Support with Python 3.10+
 
