@@ -1,4 +1,4 @@
-"""08_ik_with_mimic_joints.py
+"""IK with Mimic Joints
 
 This is a simple test to ensure that mimic joints are handled correctly in the IK solver.
 
