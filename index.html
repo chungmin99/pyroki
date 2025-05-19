@@ -296,7 +296,7 @@
 <li><p>Differentiable collision bodies with numpy broadcasting logic.</p></li>
 <li><p>Common cost factors (e.g., end effector pose, self/world-collision, manipulability).</p></li>
 <li><p>Arbitrary costs, getting Jacobians either calculated through autodiff or defined manually.</p></li>
-<li><p>Integration with a <a class="reference external" href="https://github.com/brentyi/jaxls">Levenberg-Marquardt Solver</a>.</p></li>
+<li><p>Integration with a <a class="reference external" href="https://github.com/brentyi/jaxls">Levenberg-Marquardt Solver</a> that supports optimization on manifolds (e.g., <a class="reference external" href="https://github.com/brentyi/jaxlie">lie groups</a>).</p></li>
 <li><p>Cross-platform support (CPU, GPU, TPU).</p></li>
 </ul>
 <section id="installation">
@@ -337,11 +337,14 @@ Thank you so much for your great work!</p>
 <section id="citation">
 <h2>Citation<a class="headerlink" href="#citation" title="Link to this heading">¶</a></h2>
 <p>If you find this work useful, please cite it as follows:</p>
-<div class="highlight-bibtex notranslate"><div class="highlight"><pre><span></span><span class="nc">@article</span><span class="p">{</span><span class="nl">pyroki2025</span><span class="p">,</span>
-<span class="na">author</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s">{Kim, Chung Min* and Yi, Brent* and Choi, Hongsuk and Ma, Yi and Goldberg, Ken and Kanazawa, Angjoo}</span><span class="p">,</span>
-<span class="na">title</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s">{PyRoki: A Modular Toolkit for Robot Kinematic Optimization}</span><span class="p">,</span>
-<span class="na">journal</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s">{arXiv}</span><span class="p">,</span>
-<span class="na">year</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s">{2025}</span><span class="p">,</span>
+<div class="highlight-bibtex notranslate"><div class="highlight"><pre><span></span><span class="nc">@misc</span><span class="p">{</span><span class="nl">pyroki2025</span><span class="p">,</span>
+<span class="w">   </span><span class="na">title</span><span class="p">=</span><span class="s">{PyRoki: A Modular Toolkit for Robot Kinematic Optimization}</span><span class="p">,</span>
+<span class="w">   </span><span class="na">author</span><span class="p">=</span><span class="s">{Chung Min Kim* and Brent Yi* and Hongsuk Choi and Yi Ma and Ken Goldberg and Angjoo Kanazawa}</span><span class="p">,</span>
+<span class="w">   </span><span class="na">year</span><span class="p">=</span><span class="s">{2025}</span><span class="p">,</span>
+<span class="w">   </span><span class="na">eprint</span><span class="p">=</span><span class="s">{2505.03728}</span><span class="p">,</span>
+<span class="w">   </span><span class="na">archivePrefix</span><span class="p">=</span><span class="s">{arXiv}</span><span class="p">,</span>
+<span class="w">   </span><span class="na">primaryClass</span><span class="p">=</span><span class="s">{cs.RO}</span><span class="p">,</span>
+<span class="w">   </span><span class="na">url</span><span class="p">=</span><span class="s">{https://arxiv.org/abs/2505.03728}</span><span class="p">,</span>
 <span class="p">}</span>
 </pre></div>
 </div>
