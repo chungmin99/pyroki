@@ -28,7 +28,7 @@ Features include:
 Installation
 ------------
 
-You can install `pyroki` with `pip`, on Python 3.12+:
+You can install ``pyroki`` with ``pip``, on Python 3.12+:
 
 .. code-block:: bash
 
