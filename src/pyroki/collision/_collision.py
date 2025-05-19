@@ -4,19 +4,18 @@ from typing import Callable, Dict, Tuple, cast
 
 import jax
 import jax.numpy as jnp
-import jax_dataclasses as jdc
-from jaxtyping import Float, Array
+from jaxtyping import Array, Float
 
-from ._geometry import CollGeom, HalfSpace, Sphere, Capsule, Heightmap
+from ._geometry import Capsule, CollGeom, HalfSpace, Heightmap, Sphere
 from ._geometry_pairs import (
-    halfspace_sphere,
-    halfspace_capsule,
-    sphere_sphere,
-    sphere_capsule,
     capsule_capsule,
-    heightmap_sphere,
+    halfspace_capsule,
+    halfspace_sphere,
     heightmap_capsule,
     heightmap_halfspace,
+    heightmap_sphere,
+    sphere_capsule,
+    sphere_sphere,
 )
 
 COLLISION_FUNCTIONS: Dict[
@@ -53,7 +52,6 @@ def _get_coll_func(
     )
 
 
-@jdc.jit
 def collide(geom1: CollGeom, geom2: CollGeom) -> Float[Array, "*batch"]:
     """Calculate collision distance between two geometric objects, handling broadcasting."""
     try:
@@ -65,17 +63,11 @@ def collide(geom1: CollGeom, geom2: CollGeom) -> Float[Array, "*batch"]:
             f"Cannot broadcast geometry shapes {geom1.get_batch_axes()} and {geom2.get_batch_axes()}"
         ) from e
 
-    geom1_b = geom1.broadcast_to(*broadcast_shape)
-    geom2_b = geom2.broadcast_to(*broadcast_shape)
-
+    geom1 = geom1.broadcast_to(broadcast_shape)
+    geom2 = geom2.broadcast_to(broadcast_shape)
     geom1_cls = type(geom1)
     geom2_cls = type(geom2)
-
-    func = _get_coll_func(geom1_cls, geom2_cls)
-
-    dist_result = func(geom1_b, geom2_b)
-
-    return dist_result
+    return _get_coll_func(geom1_cls, geom2_cls)(geom1, geom2)
 
 
 def pairwise_collide(geom1: CollGeom, geom2: CollGeom) -> Float[Array, "*batch N M"]:
@@ -116,16 +108,17 @@ def pairwise_collide(geom1: CollGeom, geom2: CollGeom) -> Float[Array, "*batch N
             f"Cannot broadcast non-mapped batch shapes {batch1_shape} and {batch2_shape}"
         ) from e
     expected_output_shape = (*batch_combined_shape, N, M)
-
-    result = jax.vmap(collide)(
-        geom1.broadcast_to(*expected_output_shape),
-        geom2.broadcast_to(*expected_output_shape),
+    result = collide(
+        geom1.broadcast_to((*batch_combined_shape, N))
+        .reshape((*batch_combined_shape, N, 1))
+        .broadcast_to(expected_output_shape),
+        geom2.broadcast_to((*batch_combined_shape, M))
+        .reshape((*batch_combined_shape, 1, M))
+        .broadcast_to(expected_output_shape),
     )
-
     assert result.shape == expected_output_shape, (
         f"Output shape mismatch. Expected {expected_output_shape}, got {result.shape}"
     )
-
     return result
 
 

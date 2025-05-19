@@ -1,20 +1,20 @@
 from __future__ import annotations
 
 import abc
-from typing import cast, Self
+from typing import cast
 
-import trimesh
-
-import jax.numpy as jnp
-import jaxlie
-from jaxtyping import Float, Array
-import jax_dataclasses as jdc
-import numpy as onp
 import jax
+import jax.numpy as jnp
 import jax.scipy.ndimage
+import jax_dataclasses as jdc
+import jaxlie
+import numpy as onp
+import trimesh
+from jax.typing import ArrayLike
+from jaxtyping import Array, Float
+from typing_extensions import Self
 
 from ._utils import make_frame
-from jax.typing import ArrayLike
 
 
 @jdc.pytree_dataclass
@@ -30,49 +30,47 @@ class CollGeom(abc.ABC):
     def get_batch_axes(self) -> tuple[int, ...]:
         """Get batch axes of the geometry."""
         batch_axes_from_pose = self.pose.get_batch_axes()
-        size_batch_axes = self.size.shape[:-1]
-        assert size_batch_axes == batch_axes_from_pose, (
-            f"Size batch axes {size_batch_axes} do not match pose batch axes {batch_axes_from_pose}."
+        return jnp.broadcast_shapes(
+            *[
+                getattr(leaf, "shape", ())[: len(batch_axes_from_pose)]
+                for leaf in jax.tree.leaves(self)
+            ]
         )
-        return batch_axes_from_pose
 
-    def broadcast_to(self, *shape: int) -> Self:
-        """Broadcast geometry to given shape."""
-        new_pose_wxyz_xyz = jnp.broadcast_to(self.pose.wxyz_xyz, shape + (7,))
-        new_pose = jaxlie.SE3(new_pose_wxyz_xyz)
-        shape_dim = self.size.shape[-1]
-        new_size = jnp.broadcast_to(self.size, shape + (shape_dim,))
-        return type(self)(pose=new_pose, size=new_size)
+    def broadcast_to(self, shape: tuple[int, ...]) -> Self:
+        """Broadcast geometry with given batch axes."""
+        return jax.tree.map(
+            lambda x: jnp.broadcast_to(
+                x, shape + getattr(x, "shape", ())[len(self.pose.get_batch_axes()) :]
+            ),
+            self,
+        )
 
-    def reshape(self, *shape: int) -> Self:
+    def reshape(self, shape: tuple[int, ...]) -> Self:
         """Reshape geometry to given shape."""
-        new_pose_wxyz_xyz = self.pose.wxyz_xyz.reshape(shape + (7,))
-        new_pose = jaxlie.SE3(new_pose_wxyz_xyz)
-        shape_dim = self.size.shape[-1]
-        new_size = self.size.reshape(shape + (shape_dim,))
-        return type(self)(pose=new_pose, size=new_size)
+        return jax.tree.map(
+            lambda x: x.reshape(
+                shape + getattr(x, "shape", ())[len(self.pose.get_batch_axes()) :]
+            ),
+            self,
+        )
 
     def transform(self, transform: jaxlie.SE3) -> Self:
-        """Applies an SE3 transformation to the geometry."""
-        new_pose = transform @ self.pose
-        new_batch_axes = new_pose.get_batch_axes()
-        broadcast_size = jnp.broadcast_to(
-            self.size, new_batch_axes + self.size.shape[-1:]
-        )
-        kwargs = {"pose": new_pose, "size": broadcast_size}
-        return type(self)(**kwargs)
+        """Left-multiples geometry's pose with an SE(3) transformation."""
+        with jdc.copy_and_mutate(self) as out:
+            out.pose = transform @ self.pose
+        return out.broadcast_to(out.pose.get_batch_axes())
 
-    def transform_from_pos_wxyz(
+    def transform_from_wxyz_position(
         self,
-        position: Float[ArrayLike, "*batch 3"],
         wxyz: Float[ArrayLike, "*batch 4"],
+        position: Float[ArrayLike, "*batch 3"],
     ) -> Self:
-        """
-        Transform the geometry from a position and orientation.
+        """Left-multiples geometry's pose with an SE(3) transformation.
 
         Equivalent to `self.transform`, but doesn't require direct JAX instantiation of SE3.
         """
-        position, wxyz = jnp.array(position), jnp.array(wxyz)
+        position, wxyz = jnp.asarray(position), jnp.asarray(wxyz)
         pose = jaxlie.SE3.from_rotation_and_translation(jaxlie.SO3(wxyz), position)
         return self.transform(pose)
 
@@ -594,42 +592,6 @@ class Heightmap(CollGeom):
         # Reshape to (*batch, H*W, 3).
         vertices_flat = vertices.reshape(batch_axes + (H * W, 3))
         return vertices_flat
-
-    def broadcast_to(self, *shape: int) -> Self:
-        """Broadcast geometry to given shape."""
-        new_pose_wxyz_xyz = jnp.broadcast_to(self.pose.wxyz_xyz, shape + (7,))
-        new_pose = jaxlie.SE3(new_pose_wxyz_xyz)
-        shape_dim = self.size.shape[-1]
-        new_size = jnp.broadcast_to(self.size, shape + (shape_dim,))
-        new_height_data = jnp.broadcast_to(
-            self.height_data, shape + self.height_data.shape[-2:]
-        )
-        return type(self)(pose=new_pose, size=new_size, height_data=new_height_data)
-
-    def reshape(self, *shape: int) -> Self:
-        """Reshape geometry to given shape."""
-        new_pose_wxyz_xyz = self.pose.wxyz_xyz.reshape(shape + (7,))
-        new_pose = jaxlie.SE3(new_pose_wxyz_xyz)
-        shape_dim = self.size.shape[-1]
-        new_size = self.size.reshape(shape + (shape_dim,))
-        new_height_data = self.height_data.reshape(shape + self.height_data.shape[-2:])
-        return type(self)(pose=new_pose, size=new_size, height_data=new_height_data)
-
-    def transform(self, transform: jaxlie.SE3) -> Self:
-        """Applies an SE3 transformation to the geometry."""
-        new_pose = transform @ self.pose
-        new_batch_axes = new_pose.get_batch_axes()
-        broadcast_size = jnp.broadcast_to(
-            self.size, new_batch_axes + self.size.shape[-1:]
-        )
-        broadcast_height_data = jnp.broadcast_to(
-            self.height_data, new_batch_axes + self.height_data.shape[-2:]
-        )
-        return type(self)(
-            pose=new_pose,
-            size=broadcast_size,
-            height_data=broadcast_height_data,
-        )
 
     def _create_one_mesh(self, index: tuple) -> trimesh.Trimesh:
         """Create a single trimesh object from height data at a given index.

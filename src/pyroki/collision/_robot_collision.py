@@ -394,7 +394,7 @@ class RobotCollision:
         world_axes = world_geom.get_batch_axes()
         if len(world_axes) == 0:  # Single world object
             # Use the object's broadcast_to method to add the M=1 axis correctly
-            _world_geom = world_geom.broadcast_to(1)
+            _world_geom = world_geom.broadcast_to((1,))
             M = 1
             batch_world_shape = ()
         else:  # Multiple world objects

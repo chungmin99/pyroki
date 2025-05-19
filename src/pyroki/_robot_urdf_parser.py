@@ -8,7 +8,7 @@ import numpy as onp
 import yourdfpy
 from jax import Array
 from jax import numpy as jnp
-from jaxtyping import Bool, Float, Int
+from jaxtyping import Float, Int
 from loguru import logger
 
 
@@ -29,7 +29,7 @@ class JointInfo:
     parent_indices: Int[Array, " n_joints"]
     """Index of the parent joint for each joint. Shape: (n_joints,)."""
     actuated_indices: Int[Array, " n_joints"]
-    """Index of the associated actuated joint that drives each joint. Shape: (n_joints,)."""
+    """Index of the associated actuated joint that drives each joint. -1 if mimic joint. Shape: (n_joints,)."""
 
     # Limits for actuated joints.
     lower_limits: Float[Array, " n_act_joints"]
@@ -49,11 +49,11 @@ class JointInfo:
 
     # Mimic joint parameters.
     mimic_multiplier: Float[Array, " n_joints"]
-    """Mimic multiplier for each joint. Shape: (n_joints,)."""
+    """Mimic multiplier for each joint. Shape: (n_joints,). 1.0 if not a mimic joint."""
     mimic_offset: Float[Array, " n_joints"]
-    """Mimic offset for each joint. Shape: (n_joints,)."""
-    is_mimic: Bool[Array, " n_joints"]
-    """Whether each joint is a mimic joint. Shape: (n_joints,)."""
+    """Mimic offset for each joint. Shape: (n_joints,). 0 if not a mimic joint."""
+    mimic_act_indices: Int[Array, " n_joints"]
+    """Index of the actuated joint that is mimicked by each joint. -1 if not a mimic joint. Shape: (n_joints,)."""
 
     _topo_sort_inv: Int[Array, " n_joints"]
     """Inverse topological sort order, mapping sorted joint index to original joint index."""
@@ -72,10 +72,18 @@ class JointInfo:
         value_padded = jnp.concatenate(
             [value_actuated, jnp.zeros((*batch_axes, 1))], axis=-1
         )
-        safe_actuated_indices = jnp.where(
-            self.actuated_indices == -1,
-            self.num_actuated_joints,  # Point to the zero padding
+
+        # Replace mimic indices with the actuated joint index they refer to.
+        replace_mimic_indices = jnp.where(
+            self.mimic_act_indices == -1,
             self.actuated_indices,
+            self.mimic_act_indices,
+        )
+
+        safe_actuated_indices = jnp.where(
+            replace_mimic_indices == -1,
+            self.num_actuated_joints,  # Point to the zero padding.
+            replace_mimic_indices,
         )
 
         # value_referenced contains the value of the joint each joint index refers to.
@@ -207,7 +215,7 @@ class RobotURDFParser:
         actuated_name_list = list[str]()
         mimic_multiplier_list = list[float]()
         mimic_offset_list = list[float]()
-        is_mimic_list = list[bool]()
+        mimic_act_idx_list = list[int]()
 
         # Store limits read directly from URDF for *all* joints -> _eff
         lower_limit_eff_list = list[float]()
@@ -229,11 +237,11 @@ class RobotURDFParser:
 
             # Get the actuated joint index it refers to (could be itself or mimicked).
             # Also get mimic parameters if applicable.
-            act_idx, is_mimic, multiplier, offset = (
+            act_idx, mimic_act_idx, multiplier, offset = (
                 RobotURDFParser._get_act_joint_idx_and_mimic(urdf, joint)
             )
             actuated_idx_list.append(act_idx)
-            is_mimic_list.append(is_mimic)
+            mimic_act_idx_list.append(mimic_act_idx)
             mimic_multiplier_list.append(multiplier)
             mimic_offset_list.append(offset)
             if act_idx != -1:
@@ -248,7 +256,7 @@ class RobotURDFParser:
             velocity_limit_eff_list.append(vel_limit_eff)
 
             # Get directly actuated joint limits.
-            if joint in urdf.actuated_joints and not is_mimic:
+            if joint in urdf.actuated_joints and mimic_act_idx == -1:
                 lower_limit_act_list.append(lower_eff)
                 upper_limit_act_list.append(upper_eff)
                 velocity_limit_act_list.append(vel_limit_eff)
@@ -302,7 +310,7 @@ class RobotURDFParser:
             velocity_limits_all=velocity_limits_eff_arr,
             mimic_multiplier=mimic_multiplier_arr,
             mimic_offset=mimic_offset_arr,
-            is_mimic=jnp.array(is_mimic_list),
+            mimic_act_indices=jnp.array(mimic_act_idx_list),
             _topo_sort_inv=topo_sort_inv_val,
         )
         assert joint_info.twists.shape == (joint_info.num_joints, 6)
@@ -318,7 +326,7 @@ class RobotURDFParser:
         assert joint_info._topo_sort_inv.shape == (joint_info.num_joints,)
         assert joint_info.mimic_multiplier.shape == (joint_info.num_joints,)
         assert joint_info.mimic_offset.shape == (joint_info.num_joints,)
-        assert joint_info.is_mimic.shape == (joint_info.num_joints,)
+        assert joint_info.mimic_act_indices.shape == (joint_info.num_joints,)
 
         link_info = LinkInfo(
             num_links=len(link_name_list),
@@ -331,23 +339,23 @@ class RobotURDFParser:
     @staticmethod
     def _get_act_joint_idx_and_mimic(
         urdf: yourdfpy.URDF, joint: yourdfpy.Joint
-    ) -> tuple[int, bool, float, float]:
+    ) -> tuple[int, int, float, float]:
         """Get the index of the actuated joint for a joint, and mimic parameters."""
-        is_mimic = False
+        mimic_act_idx = -1
         multiplier = 1.0
         offset = 0.0
 
         # Check if this joint is a mimic joint.
         if joint.mimic is not None:
-            is_mimic = True
             if joint.mimic.multiplier is not None:
                 multiplier = joint.mimic.multiplier
             if joint.mimic.offset is not None:
                 offset = joint.mimic.offset
 
+            act_joint_idx = -1
             mimicked_joint_name = joint.mimic.joint
             mimicked_joint = urdf.joint_map[mimicked_joint_name]
-            act_joint_idx = urdf.actuated_joints.index(mimicked_joint)
+            mimic_act_idx = urdf.actuated_joints.index(mimicked_joint)
 
         # If not mimic, check if it's directly actuated.
         elif joint in urdf.actuated_joints:
@@ -358,7 +366,7 @@ class RobotURDFParser:
         else:
             act_joint_idx = -1  # Represents non-actuated/fixed.
 
-        return act_joint_idx, is_mimic, multiplier, offset
+        return act_joint_idx, mimic_act_idx, multiplier, offset
 
     @staticmethod
     def _get_joint_twist(joint: yourdfpy.Joint) -> Array:

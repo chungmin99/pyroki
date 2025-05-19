@@ -16,13 +16,14 @@ All examples can be run by first cloning the PyRoki repository, which includes t
 
 
         import time
-        import viser
-        import numpy as np
-        from robot_descriptions.loaders.yourdfpy import load_robot_description
 
+        import numpy as np
         import pyroki as pk
+        import viser
         from pyroki.collision import HalfSpace, RobotCollision, Sphere
+        from robot_descriptions.loaders.yourdfpy import load_robot_description
         from viser.extras import ViserUrdf
+
         import pyroki_snippets as pks
 
 
@@ -75,9 +76,9 @@ All examples can be run by first cloning the PyRoki repository, which includes t
             while True:
                 start_time = time.time()
 
-                sphere_coll_world_current = sphere_coll.transform_from_pos_wxyz(
-                    position=np.array(sphere_handle.position),
+                sphere_coll_world_current = sphere_coll.transform_from_wxyz_position(
                     wxyz=np.array(sphere_handle.wxyz),
+                    position=np.array(sphere_handle.position),
                 )
 
                 world_coll_list = [plane_coll, sphere_coll_world_current]

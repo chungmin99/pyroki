@@ -11,29 +11,50 @@ from .._robot import Robot
 def _get_actuated_joints_applied_to_target(
     robot: Robot,
     target_joint_idx: jax.Array,
-):
-    """Get the indices of the actuated joints that affect the pose of the target link.
+) -> jax.Array:
+    """For each joint `i` in the robot, we return an index that is:
 
-    We return an array with shape (num_joints,), where each element is either
-    (a) an actuated joint index or (b) -1 if the joint is not in the path to
-    the target link.
+    1) -1 if the joint is not in the path to the target link.
+    2) an actuated joint index if the joint is in the path to the target link.
+        - If the joint `i` is actuated, this is just `i`.
+        - If the joint `i` mimics joint `j`, this is set to `j`.
+
+    The inputs and outputs should both be integer arrays of shape
+    `(num_joints,)`.
     """
 
-    def scan_fn(current_parent_idx: jax.Array, i: jax.Array):
-        # Check if this joint is in the path to the target
-        is_in_path = i == current_parent_idx
-        act_joint_idx = jnp.where(is_in_path, robot.joints.actuated_indices[..., i], -1)
-        current_parent_idx = jnp.where(
-            is_in_path, robot.joints.parent_indices[..., i], current_parent_idx
-        )
-        return current_parent_idx, act_joint_idx
+    assert target_joint_idx.shape == ()
 
-    return jax.lax.scan(
-        scan_fn,
-        init=target_joint_idx,
-        xs=jnp.arange(robot.joints.num_joints),
-        reverse=True,
-    )[1]
+    def body_fun(joint_idx, indices):
+        # Find the corresponding active actuated joint.
+        active_act_joint = jnp.where(
+            robot.joints.actuated_indices[joint_idx] != -1,
+            # The current joint is actuated.
+            robot.joints.actuated_indices[joint_idx],
+            # The current joint is not actuated; this is -1 if not a mimic joint.
+            robot.joints.mimic_act_indices[joint_idx],
+        )
+
+        # Find the parent of the current joint.
+        parent_joint = robot.joints.parent_indices[joint_idx]
+
+        # Continue traversing up the kinematic tree, using the parent joint.
+        # This value may either go up or down, since there's no guarantee that
+        # the kinematic tree is topologically sorted. :-)
+        next_indices = indices.at[joint_idx].set(active_act_joint)
+        return (parent_joint, next_indices)
+
+    idx_applied_to_target = jnp.full(
+        (robot.joints.num_joints,),
+        fill_value=-1,
+        dtype=jnp.int32,
+    )
+    idx_applied_to_target = jax.lax.while_loop(
+        lambda carry: jnp.any(carry[0] >= 0),
+        lambda carry: body_fun(*carry),
+        (target_joint_idx, idx_applied_to_target),
+    )[-1]
+    return idx_applied_to_target
 
 
 _PoseCostJacCache = tuple[jax.Array, jax.Array, jaxlie.SE3]
@@ -118,19 +139,19 @@ def _pose_cost_jac(
 
     R_ee_world = T_world_ee.rotation().inverse()
 
-    # Get joint twists
-    joint_twists = robot.joints.twists
+    # Get joint twists; these are scaled for mimic joints.
+    joint_twists = robot.joints.twists * robot.joints.mimic_multiplier[..., None]
 
-    # Get angular velocity components (omega)
-    omega_local = joint_twists[..., 3:]
+    # Get angular velocity components (omega).
+    omega_local = joint_twists[:, 3:]
     omega_wrt_world = Ts_world_joint.rotation() @ omega_local
     omega_wrt_ee = R_ee_world @ omega_wrt_world
 
-    # Get linear velocity components (v)
-    vel_local = joint_twists[..., :3]
+    # Get linear velocity components (v).
+    vel_local = joint_twists[:, :3]
     vel_wrt_world = Ts_world_joint.rotation() @ vel_local
 
-    # Compute the linear velocity component (v = ω × r + v_joint)
+    # Compute the linear velocity component (v = ω × r + v_joint).
     vel_wrt_world = (
         jnp.cross(
             omega_wrt_world,
@@ -140,7 +161,7 @@ def _pose_cost_jac(
     )
     vel_wrt_ee = R_ee_world @ vel_wrt_world
 
-    # Combine into spatial jacobian
+    # Combine into spatial Jacobian.
     jac = jnp.where(
         joints_applied_to_target[:, None] != -1,
         jnp.concatenate(
@@ -154,11 +175,15 @@ def _pose_cost_jac(
     ).T
     jac = pose_error.jlog() @ jac
 
-    # TODO: @cmk I don't really know how to correctly use these 🥲
+    # Jacobian of all joints => Jacobian of actuated joints.
     #
-    # this indexing/slicing here works for Panda but I'm not sure how to
-    # make this generalize
-    jac = jac[:, robot.joints.actuated_indices][:, : robot.joints.num_actuated_joints]
+    # Because of mimic joints, the Jacobian terms from multiple joints can be
+    # applied to a single actuated joint. This is summed!
+    jac = (
+        jnp.zeros((6, robot.joints.num_actuated_joints))
+        .at[:, joints_applied_to_target]
+        .add((joints_applied_to_target[None, :] != -1) * jac)
+    )
 
     # Apply weights
     weights = jnp.array([pos_weight] * 3 + [ori_weight] * 3)
@@ -184,7 +209,7 @@ def _pose_cost_analytical_jac(
     Ts_world_joint = robot._forward_kinematics_joints(joint_cfg)
     Ts_world_link = robot._link_poses_from_joint_poses(Ts_world_joint)
 
-    T_world_ee = jaxlie.SE3(Ts_world_link[..., target_link_index, :])
+    T_world_ee = jaxlie.SE3(Ts_world_link[target_link_index, :])
     pose_error = target_pose.inverse() @ T_world_ee
     return (
         pose_error.log() * jnp.array([pos_weight] * 3 + [ori_weight] * 3),
