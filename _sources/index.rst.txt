@@ -19,7 +19,7 @@ Features include:
 - Automatic generation of robot collision primitives (e.g., capsules).
 - Differentiable collision bodies with numpy broadcasting logic. 
 - Common cost factors (e.g., end effector pose, self/world-collision, manipulability).
-- Arbitrary costs, getting Jacobians either calculated through autodiff or defined manually.
+- Arbitrary costs, getting Jacobians either calculated :doc:`through autodiff or defined manually<misc/writing_manual_jac>`.
 - Integration with a `Levenberg-Marquardt Solver <https://github.com/brentyi/jaxls>`_ that supports optimization on manifolds (e.g., `lie groups <https://github.com/brentyi/jaxlie>`_).
 - Cross-platform support (CPU, GPU, TPU).
 
@@ -28,7 +28,7 @@ Features include:
 Installation
 ------------
 
-You can install ``pyroki`` with ``pip``, with Python 3.12+:
+You can install ``pyroki`` with ``pip``, on Python 3.12+:
 
 .. code-block:: bash
 
@@ -36,6 +36,8 @@ You can install ``pyroki`` with ``pip``, with Python 3.12+:
    cd pyroki
    pip install -e .
 
+
+Python 3.10-3.11 should also work, but support may be dropped in the future.
 
 Examples
 --------
@@ -51,6 +53,9 @@ Examples
    examples/05_ik_with_manipulability
    examples/06_online_planning
    examples/07_trajopt
+   examples/08_ik_with_mimic_joints
+   examples/09_hand_retargeting
+   examples/10_humanoid_retargeting
 
 
 Acknowledgements

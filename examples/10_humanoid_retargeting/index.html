@@ -3,7 +3,7 @@
   <head><meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width,initial-scale=1"/>
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
-<link rel="index" title="Index" href="../../genindex/" /><link rel="search" title="Search" href="../../search/" />
+<link rel="index" title="Index" href="../../genindex/" /><link rel="search" title="Search" href="../../search/" /><link rel="prev" title="Hand Retargeting" href="../09_hand_retargeting/" />
 
     <!-- Generated with Sphinx 8.0.2 and Furo 2024.08.06 -->
         <title>Humanoid Retargeting - pyroki</title>
@@ -231,7 +231,7 @@
 </form>
 <div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
   <p class="caption" role="heading"><span class="caption-text">Examples</span></p>
-<ul>
+<ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="../01_basic_ik/">Basic IK</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../02_bimanual_ik/">Bimanual IK</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../03_mobile_ik/">Mobile IK</a></li>
@@ -239,6 +239,9 @@
 <li class="toctree-l1"><a class="reference internal" href="../05_ik_with_manipulability/">IK with Manipulability</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../06_online_planning/">Online Planning</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../07_trajopt/">Trajectory Optimization</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../08_ik_with_mimic_joints/">IK with mimic joints</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../09_hand_retargeting/">Hand Retargeting</a></li>
+<li class="toctree-l1 current current-page"><a class="current reference internal" href="#">Humanoid Retargeting</a></li>
 </ul>
 
 </div>
@@ -299,7 +302,7 @@
 <span class="linenos"> 14</span><span class="kn">from</span><span class="w"> </span><span class="nn">pyroki.collision</span><span class="w"> </span><span class="kn">import</span> <span class="n">colldist_from_sdf</span><span class="p">,</span> <span class="n">collide</span>
 <span class="linenos"> 15</span><span class="kn">from</span><span class="w"> </span><span class="nn">robot_descriptions.loaders.yourdfpy</span><span class="w"> </span><span class="kn">import</span> <span class="n">load_robot_description</span>
 <span class="linenos"> 16</span>
-<span class="linenos"> 17</span><span class="kn">from</span><span class="w"> </span><span class="nn">examples.retarget_helpers._utils</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+<span class="linenos"> 17</span><span class="kn">from</span><span class="w"> </span><span class="nn">retarget_helpers._utils</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
 <span class="linenos"> 18</span>    <span class="n">SMPL_JOINT_NAMES</span><span class="p">,</span>
 <span class="linenos"> 19</span>    <span class="n">create_conn_tree</span><span class="p">,</span>
 <span class="linenos"> 20</span>    <span class="n">get_humanoid_retarget_indices</span><span class="p">,</span>
@@ -794,7 +797,17 @@
         
         <div class="related-pages">
           
-          
+          <a class="prev-page" href="../09_hand_retargeting/">
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+              <div class="page-info">
+                <div class="context">
+                  <span>Previous</span>
+                </div>
+                
+                <div class="title">Hand Retargeting</div>
+                
+              </div>
+            </a>
         </div>
         <div class="bottom-of-page">
           <div class="left-details">

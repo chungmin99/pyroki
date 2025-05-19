@@ -239,6 +239,9 @@
 <li class="toctree-l1"><a class="reference internal" href="examples/05_ik_with_manipulability/">IK with Manipulability</a></li>
 <li class="toctree-l1"><a class="reference internal" href="examples/06_online_planning/">Online Planning</a></li>
 <li class="toctree-l1"><a class="reference internal" href="examples/07_trajopt/">Trajectory Optimization</a></li>
+<li class="toctree-l1"><a class="reference internal" href="examples/08_ik_with_mimic_joints/">IK with mimic joints</a></li>
+<li class="toctree-l1"><a class="reference internal" href="examples/09_hand_retargeting/">Hand Retargeting</a></li>
+<li class="toctree-l1"><a class="reference internal" href="examples/10_humanoid_retargeting/">Humanoid Retargeting</a></li>
 </ul>
 
 </div>
@@ -295,18 +298,19 @@
 <li><p>Automatic generation of robot collision primitives (e.g., capsules).</p></li>
 <li><p>Differentiable collision bodies with numpy broadcasting logic.</p></li>
 <li><p>Common cost factors (e.g., end effector pose, self/world-collision, manipulability).</p></li>
-<li><p>Arbitrary costs, getting Jacobians either calculated through autodiff or defined manually.</p></li>
+<li><p>Arbitrary costs, getting Jacobians either calculated <a class="reference internal" href="misc/writing_manual_jac/"><span class="doc">through autodiff or defined manually</span></a>.</p></li>
 <li><p>Integration with a <a class="reference external" href="https://github.com/brentyi/jaxls">Levenberg-Marquardt Solver</a> that supports optimization on manifolds (e.g., <a class="reference external" href="https://github.com/brentyi/jaxlie">lie groups</a>).</p></li>
 <li><p>Cross-platform support (CPU, GPU, TPU).</p></li>
 </ul>
 <section id="installation">
 <h2>Installation<a class="headerlink" href="#installation" title="Link to this heading">¶</a></h2>
-<p>You can install <code class="docutils literal notranslate"><span class="pre">pyroki</span></code> with <code class="docutils literal notranslate"><span class="pre">pip</span></code>, with Python 3.12+:</p>
+<p>You can install <code class="docutils literal notranslate"><span class="pre">pyroki</span></code> with <code class="docutils literal notranslate"><span class="pre">pip</span></code>, on Python 3.12+:</p>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>git<span class="w"> </span>clone<span class="w"> </span>https://github.com/chungmin99/pyroki.git
 <span class="nb">cd</span><span class="w"> </span>pyroki
 pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span>.
 </pre></div>
 </div>
+<p>Python 3.10-3.11 should also work, but support may be dropped in the future.</p>
 </section>
 <section id="examples">
 <h2>Examples<a class="headerlink" href="#examples" title="Link to this heading">¶</a></h2>
@@ -320,6 +324,9 @@ pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </s
 <li class="toctree-l1"><a class="reference internal" href="examples/05_ik_with_manipulability/">IK with Manipulability</a></li>
 <li class="toctree-l1"><a class="reference internal" href="examples/06_online_planning/">Online Planning</a></li>
 <li class="toctree-l1"><a class="reference internal" href="examples/07_trajopt/">Trajectory Optimization</a></li>
+<li class="toctree-l1"><a class="reference internal" href="examples/08_ik_with_mimic_joints/">IK with mimic joints</a></li>
+<li class="toctree-l1"><a class="reference internal" href="examples/09_hand_retargeting/">Hand Retargeting</a></li>
+<li class="toctree-l1"><a class="reference internal" href="examples/10_humanoid_retargeting/">Humanoid Retargeting</a></li>
 </ul>
 </div>
 </section>
