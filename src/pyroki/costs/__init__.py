@@ -12,3 +12,4 @@ from ._costs import self_collision_cost as self_collision_cost
 from ._costs import smoothness_cost as smoothness_cost
 from ._costs import world_collision_cost as world_collision_cost
 from ._pose_cost_analytic_jac import pose_cost_analytic_jac as pose_cost_analytic_jac
+from ._pose_cost_numerical_jac import pose_cost_numerical_jac as pose_cost_numerical_jac
