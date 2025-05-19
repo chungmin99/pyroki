@@ -46,4 +46,4 @@ The alternative is to manually write out the Jacobian -- while automatic differe
 We provide two implementations of pose matching cost with custom Jacobians:
 
 - an `analytically derived Jacobian <https://github.com/chungmin99/pyroki/blob/main/src/pyroki/costs/_pose_cost_analytic_jac.py>`_ (~200 lines), or
-- a `numerically computed Jacobian <https://github.com/chungmin99/pyroki/blob/main/src/pyroki/costs/_pose_cost_numerical_jac.py>`_ through finite differences (~50 lines).
+- a `numerically approximated Jacobian <https://github.com/chungmin99/pyroki/blob/main/src/pyroki/costs/_pose_cost_numerical_jac.py>`_ through finite differences (~50 lines).
