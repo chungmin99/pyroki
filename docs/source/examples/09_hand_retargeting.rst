@@ -6,6 +6,7 @@ Hand Retargeting
 
 
 Shadow Hand retargeting example, with costs to maintain contact with the object.
+Find and unzip the shadowhand URDF at ``assets/hand_retargeting/shadowhand_urdf.zip``.
 
 All examples can be run by first cloning the PyRoki repository, which includes the ``pyroki_snippets`` implementation details.
 

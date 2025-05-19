@@ -31,7 +31,7 @@ All examples can be run by first cloning the PyRoki repository, which includes t
         from pyroki.collision import colldist_from_sdf, collide
         from robot_descriptions.loaders.yourdfpy import load_robot_description
 
-        from examples.retarget_helpers._utils import (
+        from retarget_helpers._utils import (
             SMPL_JOINT_NAMES,
             create_conn_tree,
             get_humanoid_retarget_indices,
