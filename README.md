@@ -12,7 +12,7 @@ Core features include:
 - Differentiable collision bodies with numpy broadcasting logic.
 - Common cost implementations (e.g., end effector pose, self/world-collision, manipulability).
 - Arbitrary costs, autodiff or analytical Jacobians.
-- Integration with a [Levenberg-Marquardt Solver](https://github.com/brentyi/jaxls).
+- Integration with a [Levenberg-Marquardt Solver](https://github.com/brentyi/jaxls) that supports optimization on manifolds (e.g., [lie groups](https://github.com/brentyi/jaxlie))
 - Cross-platform support (CPU, GPU, TPU).
 
 Please refer to the [documentation](https://chungmin99.github.io/pyroki/) for more details, features, and usage examples.
@@ -57,11 +57,14 @@ This codebase is released with the following preprint.
 Please cite PyRoki if you find this work useful for your research:
 
 ```
-@article{pyroki2025,
- author = {Kim, Chung Min* and Yi, Brent* and Choi, Hongsuk and Ma, Yi and Goldberg, Ken and Kanazawa, Angjoo},
- title = {PyRoki: A Modular Toolkit for Robot Kinematic Optimization},
- journal = {arXiv},
- year = {2025},
+@misc{pyroki2025,
+    title={PyRoki: A Modular Toolkit for Robot Kinematic Optimization},
+    author={Chung Min Kim* and Brent Yi* and Hongsuk Choi and Yi Ma and Ken Goldberg and Angjoo Kanazawa},
+    year={2025},
+    eprint={2505.03728},
+    archivePrefix={arXiv},
+    primaryClass={cs.RO},
+    url={https://arxiv.org/abs/2505.03728},
 }
 ```
 
