@@ -8,7 +8,7 @@ import time
 import numpy as np
 import pyroki as pk
 import viser
-from pyroki.collision import HalfSpace, RobotCollision, Sphere
+from pyroki.collision import HalfSpace, RobotCollision, Sphere, Triangle
 from robot_descriptions.loaders.yourdfpy import load_robot_description
 from viser.extras import ViserUrdf
 
@@ -28,6 +28,12 @@ def main():
     sphere_coll = Sphere.from_center_and_radius(
         np.array([0.0, 0.0, 0.0]), np.array([0.05])
     )
+
+    # NEW: sphere collision done through triangle collisions.
+    # mesh == collection of triangles.
+    import trimesh
+    sphere = trimesh.creation.icosphere(radius=0.1, subdivisions=2)
+    sphere_coll = Triangle.from_trimesh(sphere)
 
     # Set up visualizer.
     server = viser.ViserServer()

@@ -647,3 +647,40 @@ class Heightmap(CollGeom):
         heightmap_mesh.apply_transform(tf)
 
         return heightmap_mesh
+
+
+@jdc.pytree_dataclass
+class Triangle(CollGeom):
+    """Triangle geometry defined by three points."""
+
+    def _create_one_mesh(self, index: tuple) -> trimesh.Trimesh:
+        """Create a single trimesh object from the triangle at a given index."""
+        # Show two sides of the triangle.
+        return trimesh.Trimesh(
+            vertices=self.size[index],
+            faces=jnp.array([[0, 1, 2], [0, 2, 1]]),
+        )
+
+    @staticmethod
+    def from_points(
+        points: Float[ArrayLike, "*batch 3 3"],
+    ) -> Triangle:
+        """Create a triangle from three points."""
+        points = jnp.array(points)
+        batch_axes = points.shape[:-2]
+        return Triangle(
+            pose=jaxlie.SE3.identity(batch_axes=batch_axes),
+            size=points,
+        )
+
+    @staticmethod
+    def from_trimesh(mesh: trimesh.Trimesh) -> Triangle:
+        """Create a triangle from a trimesh mesh."""
+        vertices = mesh.vertices
+        faces = mesh.faces
+        vertices_with_face_indices = vertices[faces]
+        batch_axes = vertices_with_face_indices.shape[:-2]
+        return Triangle(
+            pose=jaxlie.SE3.identity(batch_axes=batch_axes),
+            size=jnp.array(vertices_with_face_indices),
+        )

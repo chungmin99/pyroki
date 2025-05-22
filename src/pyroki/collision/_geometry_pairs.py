@@ -3,7 +3,7 @@ from __future__ import annotations
 import jax.numpy as jnp
 from jaxtyping import Float, Array
 
-from ._geometry import HalfSpace, Sphere, Capsule, Heightmap
+from ._geometry import HalfSpace, Sphere, Capsule, Heightmap, Triangle
 from . import _utils
 
 
@@ -216,3 +216,42 @@ def heightmap_halfspace(
     min_dist = jnp.min(vertex_distances, axis=-1)
     assert min_dist.shape == batch_axes
     return min_dist
+
+
+# --- Triangle Collision Implementations ---
+
+
+def triangle_sphere(triangle: Triangle, sphere: Sphere) -> Float[Array, "*batch"]:
+    """Calculate distance between triangle and sphere."""
+    # Get all points in world frame.
+    sphere_center = sphere.pose.translation()
+    triangle_points = triangle.pose @ triangle.size
+    a = triangle_points[..., 0, :]  # First vertex.
+    b = triangle_points[..., 1, :]  # Second vertex.
+    c = triangle_points[..., 2, :]  # Third vertex.
+
+    closest_pt = _utils.closest_point_on_triangle(sphere_center, a, b, c)
+
+    # Calculate distance from closest point to sphere surface.
+    distance_to_center = jnp.linalg.norm(closest_pt - sphere_center, axis=-1)
+    dist = distance_to_center - sphere.radius
+    return dist
+
+
+def triangle_capsule(triangle: Triangle, capsule: Capsule) -> Float[Array, "*batch"]:
+    """Calculate distance between triangle and capsule.
+    This naive implementation checks the two sphere endpoints of the capsule against the triangle.
+    """
+    endpoint_0 = (
+        capsule.pose.translation() + capsule.axis * capsule.height[..., None] / 2
+    )
+    endpoint_1 = (
+        capsule.pose.translation() - capsule.axis * capsule.height[..., None] / 2
+    )
+    endpoint_0_dist = triangle_sphere(
+        triangle, Sphere.from_center_and_radius(endpoint_0, capsule.radius)
+    )
+    endpoint_1_dist = triangle_sphere(
+        triangle, Sphere.from_center_and_radius(endpoint_1, capsule.radius)
+    )
+    return jnp.minimum(endpoint_0_dist, endpoint_1_dist)
