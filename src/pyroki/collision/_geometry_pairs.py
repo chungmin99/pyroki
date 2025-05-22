@@ -225,10 +225,9 @@ def triangle_sphere(triangle: Triangle, sphere: Sphere) -> Float[Array, "*batch"
     """Calculate distance between triangle and sphere."""
     # Get all points in world frame.
     sphere_center = sphere.pose.translation()
-    triangle_points = triangle.pose @ triangle.size
-    a = triangle_points[..., 0, :]  # First vertex.
-    b = triangle_points[..., 1, :]  # Second vertex.
-    c = triangle_points[..., 2, :]  # Third vertex.
+    a = triangle.pose @ triangle.size[..., 0, :]  # First vertex.
+    b = triangle.pose @ triangle.size[..., 1, :]  # Second vertex.
+    c = triangle.pose @ triangle.size[..., 2, :]  # Third vertex.
 
     closest_pt = _utils.closest_point_on_triangle(sphere_center, a, b, c)
 

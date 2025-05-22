@@ -32,7 +32,7 @@ def main():
     # NEW: sphere collision done through triangle collisions.
     # mesh == collection of triangles.
     import trimesh
-    sphere = trimesh.creation.icosphere(radius=0.1, subdivisions=2)
+    sphere = trimesh.creation.icosphere(radius=0.1, subdivisions=3)
     sphere_coll = Triangle.from_trimesh(sphere)
 
     # Set up visualizer.
