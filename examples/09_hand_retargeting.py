@@ -60,7 +60,7 @@ def main():
         urdf = yourdfpy.URDF.load(robot_urdf_path, filename_handler=filename_handler)
     except FileNotFoundError:
         raise FileNotFoundError(
-            "Please unzip the included URDF at `assets/hand_retargeting/shadowhand_urdf.zip`."
+            "Please unzip the included URDF at `retarget_helpers/hand/shadowhand_urdf.zip`."
         )
 
     robot = pk.Robot.from_urdf(urdf)
