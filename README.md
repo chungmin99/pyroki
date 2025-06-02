@@ -48,6 +48,12 @@ We are preparing and will release by _May 16, 2025_:
 - **No sampling-based planners**: We don't include sampling-based planners (e.g., graphs, trees).
 - **Collision performance**: Speed and accuracy comparisons against other robot toolkits such as CuRobo have not been extensively performed, and is likely slower than other toolkits for collision-heavy scenarios.
 
+The following are current implementation limitations that could potentially be addressed in future versions:
+
+- **Joint types**: We only support revolute, continuous, prismatic, and fixed joints. Other URDF joint types are treated as fixed joints.
+- **Collision geometry**: We are limited to sphere, capsule, halfspace, and heightmap geometries. Mesh collision is approximated as capsules.
+- **Kinematic structures**: We only support kinematic chains; no closed-loop mechanisms or parallel manipulators.
+
 ## Citation
 
 This codebase is released with the following preprint.
