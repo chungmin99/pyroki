@@ -11,6 +11,7 @@ from typing import Literal
 import numpy as np
 import pyroki as pk
 import trimesh
+from trimesh.voxel import ops as voxel_ops          # marching-cubes helper
 import tyro
 import viser
 from viser.extras import ViserUrdf
@@ -18,6 +19,91 @@ from robot_descriptions.loaders.yourdfpy import load_robot_description
 
 import pyroki_snippets as pks
 
+import jax.numpy as jnp
+import jaxlie
+
+def make_sphere_grid(world_center: jnp.ndarray,
+                     radius: float,
+                     voxel: tuple[float, float, float] = (0.02, 0.02, 0.02),
+                     dims: tuple[int, int, int] = (64, 64, 64),
+) -> pk.collision.SDFGrid:
+    """
+    Build a corner-anchored cubic SDF grid containing a single sphere.
+
+    Parameters
+    ----------
+    world_center : (3,) world-frame xyz of the sphere centre.
+    radius       : sphere radius [m].
+    voxel        : (dx, dy, dz) voxel size [m].
+    dims         : (nx, ny, nz) number of cells.
+
+    Returns
+    -------
+    SDFGrid  ready to append to `world_coll`.
+    """
+    voxel = jnp.asarray(voxel)
+    nx, ny, nz = dims
+    # local voxel centres (corner-anchored)
+    xs = jnp.arange(nx) * voxel[0]
+    ys = jnp.arange(ny) * voxel[1]
+    zs = jnp.arange(nz) * voxel[2]
+    pts = jnp.stack(jnp.meshgrid(xs, ys, zs, indexing="xy"), axis=-1)
+    pts = jnp.moveaxis(pts, 2, 0)                     # (z,y,x,3)
+
+    idx_half = (jnp.asarray(dims) - 1) / 2            # 31.5,31.5,31.5
+    local_center = idx_half * voxel                   # metres in grid frame
+
+    sdf = jnp.linalg.norm(pts - local_center, axis=-1) - radius
+
+    grid_origin_w = world_center - local_center       # place array corner
+    pose = jaxlie.SE3.from_translation(grid_origin_w)
+
+    return pk.collision.SDFGrid(
+        pose       = pose,
+        voxel_size = voxel,
+        size       = voxel,   # not used in distance but kept for completeness
+        sdf        = sdf,
+    )
+
+
+def add_sdf_to_viser(server: viser.ViserServer,
+                     name: str,
+                     grid: pk.collision.SDFGrid,
+                     level: float = 0.0,
+                     rgba=(0, 255, 0, 120)):
+    """
+    Extract the iso-surface `grid.sdf == level` and add it to Viser.
+
+    Parameters
+    ----------
+    server : viser.ViserServer
+    name   : path under which to insert the mesh (e.g. "/sdf_mesh")
+    grid   : pk.collision.SDFGrid
+    level  : iso-value (0.0 for the surface)
+    rgba   : mesh colour & alpha
+    """
+    # --- 1  marching cubes in *grid* frame --------------------------
+    sdf_np = np.asarray(grid.sdf)                 # (Z, Y, X)
+    # trimesh.voxel expects X,Y,Z ordering
+    sdf_np = sdf_np.transpose(2, 1, 0)            # → (X, Y, Z)
+
+    verts, faces = voxel_ops.matrix_to_marching_cubes(
+        sdf_np, pitch=float(grid.voxel_size[0]), level=level)
+
+    # if voxels are anisotropic, rescale vertices
+    verts *= np.asarray(grid.voxel_size[::-1])    # X,Y,Z order
+
+    mesh = trimesh.Trimesh(verts, faces, process=False)
+
+    # --- 2  move from grid-local to world frame --------------------
+    mesh.apply_transform(grid.pose.as_matrix())   # 4×4 world←grid
+
+    # --- 3  send to Viser -----------------------------------------
+    server.scene.add_mesh_trimesh(
+        name=name,
+        mesh=mesh,
+        rgba=rgba,
+    )
 
 def main(robot_name: Literal["ur5", "panda"] = "panda"):
     if robot_name == "ur5":
@@ -66,134 +152,10 @@ def main(robot_name: Literal["ur5", "panda"] = "panda"):
         ],
         axis=1,
     )
-    # wall_coll = pk.collision.Capsule.from_radius_height(
-    #     position=translation,
-    #     radius=np.full((translation.shape[0], 1), wall_width / 2),
-    #     height=np.full((translation.shape[0], 1), wall_height),
-    # )
-    # world_coll = [ground_coll, wall_coll]
 
-    import jax.numpy as jnp
-    import jax
-    import trimesh                     # only for quick visual check (optional)
-    import jaxlie
-
-    # ---------------------------------------------------------------------
-    # Helper: make a voxel grid centred at `origin` with resolution `voxel`
-    # ---------------------------------------------------------------------
-    def make_grid(voxel, dims_xyz):
-        nx, ny, nz = dims_xyz
-        dx, dy, dz = voxel
-        xs = (jnp.arange(nx) - (nx - 1) / 2) * dx
-        ys = (jnp.arange(ny) - (ny - 1) / 2) * dy
-        zs = (jnp.arange(nz) - (nz - 1) / 2) * dz
-        grid_pts = jnp.stack(jnp.meshgrid(xs, ys, zs, indexing="xy"), axis=-1)
-        grid_pts = jnp.moveaxis(grid_pts, 2, 0)     # (z,y,x,3)
-        return grid_pts
-
-
-    # ---------------------------------------------------------------------
-    # Primitives: sphere SDF and axis-aligned box SDF
-    # ---------------------------------------------------------------------
-    def sdf_sphere(pts, centre, radius):
-        """Signed distance to a sphere."""
-        return jnp.linalg.norm(pts - centre, axis=-1) - radius
-
-    def sdf_box(pts, centre, half_extents):
-        """Axis-aligned box; positive outside, negative inside."""
-        q = jnp.abs(pts - centre) - half_extents
-        outside = jnp.linalg.norm(jnp.clip(q, 0), axis=-1)
-        inside  = jnp.max(jnp.minimum(q, 0), axis=-1)
-        return outside + inside
-
-
-    # ---------------------------------------------------------------------
-    # Build a 64³ grid with two obstacles
-    # ---------------------------------------------------------------------
-    voxel = jnp.array([0.02, 0.02, 0.02])
-    dims_xyz = (64, 64, 64)
-    idx_half = (jnp.array(dims_xyz) - 1) / 2.0            # (31.5, 31.5, 31.5)
-    sphere_w = jnp.array([0.5, 0.0, 0.18])                 # where you want the centre
-
-    # 1. Build a *corner-anchored* grid (origin at (0,0,0) local)
-    def make_grid_corner(voxel, dims_xyz):
-        nx, ny, nz = dims_xyz
-        dx, dy, dz = voxel
-        xs = jnp.arange(nx) * dx
-        ys = jnp.arange(ny) * dy
-        zs = jnp.arange(nz) * dz
-        pts = jnp.stack(jnp.meshgrid(xs, ys, zs, indexing="xy"), axis=-1)
-        pts = jnp.moveaxis(pts, 2, 0)           # (z,y,x,3)
-        return pts
-
-    grid_pts = make_grid_corner(voxel, dims_xyz)
-
-    # 2. Build sphere SDF in *local* coordinates
-    sphere_sdf = sdf_sphere(grid_pts,
-                            centre=idx_half * voxel,   #  centre at array middle
-                            radius=0.2)
-
-    # 3. Place the grid so that index (0,0,0) sits at world = sphere_w − idx_half*voxel
-    grid_origin_w = sphere_w - idx_half * voxel
-
-    grid = pk.collision.SDFGrid(
-        pose       = jaxlie.SE3.from_translation(grid_origin_w),   # CORNER
-        voxel_size = voxel,
-        size       = voxel,
-        sdf        = sphere_sdf,
-    )
-
-
-    box_sdf    = sdf_box(grid_pts,
-                        centre=jnp.array([0.3, 0.0, 0.10]),
-                        half_extents=jnp.array([0.08, 0.30, 0.10]))
-
-    # *union* (can also take min() for intersection, -min(-d) for union of negatives, etc.)
-    combined_sdf = jnp.minimum(sphere_sdf, box_sdf)      # (z,y,x)
-    combined_sdf = sphere_sdf
-
-    # ---------------------------------------------------------------------
-    # Wrap it in an SDFGrid CollGeom (see previous answer §1)
-    # ---------------------------------------------------------------------
-
-    # grid = pk.collision.SDFGrid(
-    #     pose = jaxlie.SE3.from_translation(jnp.array([0.7, 0.0, 0.0])),  # centre of sphere
-    #     size = voxel,
-    #     voxel_size = voxel,
-    #     sdf  = combined_sdf,
-    # )
-
-    # Now `grid_geom` can be appended to your `world_coll` list:
-    # world_coll = [ground_coll, grid_geom]
-    world_coll = [ground_coll, grid]    # ← feed into solve_trajopt exactly like before
-
-    import jax.numpy as jnp
-    from functools import partial
-
-    # -------------------------------------------------------
-    # 1. zero-level sanity check
-    # -------------------------------------------------------
-    sphere_center_w = jnp.array([0.7, 0.0, 0.2])          # same as you used
-    # single-point query – robust to any  leading broadcast axes
-    sdf_at_center = grid._interpolate_sdf(sphere_center_w).reshape(()).item()
-    print(f"SDF(center) = {sdf_at_center:+.4f} m")
-
-    print(f"SDF(center)   = {sdf_at_center:+.4f} m "
-        "(should be ~0: inside the grid & oriented right)")
-    
-    sdf_at_center = grid._interpolate_sdf(sphere_w).reshape(()).item()
-    print(f"SDF(center) = {sdf_at_center:+.4f}  (≈ -0.30 expected)")
-
-    # -------------------------------------------------------
-    # 2. grid pose & extent sanity check
-    # -------------------------------------------------------
-    grid_min_w = grid.pose.apply(jnp.array([0, 0, 0]))                 # corner
-    grid_max_w = grid.pose.apply(
-        (jnp.array(grid.sdf.shape[::-1]) - 1) * grid.voxel_size)       # opposite corner
-    print(f"Grid spans X:[{grid_min_w[0]:+.2f},{grid_max_w[0]:+.2f}] m "
-        f"Y:[{grid_min_w[1]:+.2f},{grid_max_w[1]:+.2f}] m "
-        f"Z:[{grid_min_w[2]:+.2f},{grid_max_w[2]:+.2f}] m")
-
+    grid = make_sphere_grid(world_center=jnp.array([0.5, 0.0, 0.18]),
+                        radius=0.20)
+    world_coll = [ground_coll, grid]
 
     traj = pks.solve_trajopt(
         robot,
@@ -208,22 +170,6 @@ def main(robot_name: Literal["ur5", "panda"] = "panda"):
         dt,
     )
     traj = np.array(traj)
-
-    import jax.numpy as jnp
-    from functools import partial
-
-    # # Wrap once so we JIT only a single function call, not 25×
-    # @partial(jax.jit, static_argnums=(0, 1))
-    def min_signed_distance(robot, robot_coll, cfg, world_geom):
-        dist = robot_coll.compute_world_collision_distance(robot, cfg, world_geom)
-        return jnp.min(dist)          # single scalar: most negative penetration
-
-    for t, q in enumerate(traj):
-        d = float(min_signed_distance(robot, robot_coll,
-                                    jnp.asarray(q),   # cfg shape (DoF,)
-                                    grid))            # or world_coll[1]
-        print(f"step {t:02d}  min-dist = {d:+.4f} m")
-
 
     # Visualize!
     server = viser.ViserServer()
@@ -252,35 +198,7 @@ def main(robot_name: Literal["ur5", "panda"] = "panda"):
     )
     playing = server.gui.add_checkbox("Playing", initial_value=True)
 
-    # # ---- SDF  → trimesh  --------------------------------------------------
-    # # import numpy as np
-    # # import trimesh
-    # from trimesh.voxel import ops as voxel_ops     # uses skimage’s marching-cubes
-
-    # # jax → numpy
-    # sdf_np   = jnp.asarray(combined_sdf)         # (Z, Y, X)
-    # inside   = sdf_np <= 0.0                    # boolean occupancy
-
-    # # trimesh expects (X, Y, Z) ordering
-    # mc_mesh = voxel_ops.matrix_to_marching_cubes(
-    #     inside.transpose(2, 1, 0),              # → (X,Y,Z)
-    #     pitch=float(voxel[0])                   # or tuple(voxel) if anisotropic
-    # )
-
-    # # move mesh from grid-local coordinates into world coordinates
-    # # 1. Evaluate the property           ↓ parentheses!
-    # world_offset = np.asarray(origin_local) + np.asarray(grid.pose.translation())
-
-    # mc_mesh.apply_translation(world_offset)
-
-
-    # # ---- drop into viser --------------------------------------------------
-    # server.scene.add_mesh_trimesh(
-    #     name="/sdf_mesh",
-    #     mesh=mc_mesh,
-    #     wxyz=(1.0, 0.0, 0.0, 0.0),              # no rotation
-    #     visible=True,
-    # )
+    add_sdf_to_viser(server, "/sdf_mesh", grid)
 
 
     while True:
