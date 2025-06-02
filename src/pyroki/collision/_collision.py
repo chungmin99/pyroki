@@ -6,7 +6,7 @@ import jax
 import jax.numpy as jnp
 from jaxtyping import Array, Float
 
-from ._geometry import Capsule, CollGeom, HalfSpace, Heightmap, Sphere
+from ._geometry import Capsule, CollGeom, HalfSpace, Heightmap, Sphere, SDFGrid
 from ._geometry_pairs import (
     capsule_capsule,
     halfspace_capsule,
@@ -16,6 +16,8 @@ from ._geometry_pairs import (
     heightmap_sphere,
     sphere_capsule,
     sphere_sphere,
+    sdfgrid_capsule,
+    sdfgrid_sphere
 )
 
 COLLISION_FUNCTIONS: Dict[
@@ -29,6 +31,8 @@ COLLISION_FUNCTIONS: Dict[
     (Heightmap, Sphere): heightmap_sphere,
     (Heightmap, Capsule): heightmap_capsule,
     (Heightmap, HalfSpace): heightmap_halfspace,
+    (SDFGrid, Sphere): sdfgrid_sphere,
+    (SDFGrid, Capsule): sdfgrid_capsule,
 }
 
 
