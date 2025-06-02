@@ -300,7 +300,7 @@
 <li><p>Common cost factors (e.g., end effector pose, self/world-collision, manipulability).</p></li>
 <li><p>Arbitrary costs, getting Jacobians either calculated <a class="reference internal" href="misc/writing_manual_jac/"><span class="doc">through autodiff or defined manually</span></a>.</p></li>
 <li><p>Integration with a <a class="reference external" href="https://github.com/brentyi/jaxls">Levenberg-Marquardt Solver</a> that supports optimization on manifolds (e.g., <a class="reference external" href="https://github.com/brentyi/jaxlie">lie groups</a>).</p></li>
-<li><p>Cross-platform support (CPU, GPU, TPU).</p></li>
+<li><p>Cross-platform support (CPU, GPU, TPU) via JAX.</p></li>
 </ul>
 <section id="installation">
 <h2>Installation<a class="headerlink" href="#installation" title="Link to this heading">¶</a></h2>
@@ -311,6 +311,21 @@ pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </s
 </pre></div>
 </div>
 <p>Python 3.10-3.11 should also work, but support may be dropped in the future.</p>
+</section>
+<section id="limitations">
+<h2>Limitations<a class="headerlink" href="#limitations" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p><strong>Soft constraints only</strong>: We use a nonlinear least-squares formulation and model joint limits, collision avoidance, etc. as soft penalties with high weights rather than hard constraints.</p></li>
+<li><p><strong>Static shapes &amp; JIT overhead</strong>: JAX JIT compilation is triggered on first run and when input shapes change (e.g., number of targets, obstacles). Arrays can be pre-padded to vectorize over inputs with different shapes.</p></li>
+<li><p><strong>No sampling-based planners</strong>: We don’t include sampling-based planners (e.g., graphs, trees).</p></li>
+<li><p><strong>Collision performance</strong>: Speed and accuracy comparisons against other robot toolkits such as CuRobo have not been extensively performed, and is likely slower than other toolkits for collision-heavy scenarios.</p></li>
+</ul>
+<p>The following are current implementation limitations that could potentially be addressed in future versions:</p>
+<ul class="simple">
+<li><p><strong>Joint types</strong>: We only support revolute, continuous, prismatic, and fixed joints. Other URDF joint types are treated as fixed joints.</p></li>
+<li><p><strong>Collision geometry</strong>: We are limited to sphere, capsule, halfspace, and heightmap geometries. Mesh collision is approximated as capsules.</p></li>
+<li><p><strong>Kinematic structures</strong>: We only support kinematic chains; no closed-loop mechanisms or parallel manipulators.</p></li>
+</ul>
 </section>
 <section id="examples">
 <h2>Examples<a class="headerlink" href="#examples" title="Link to this heading">¶</a></h2>
@@ -413,6 +428,7 @@ Thank you so much for your great work!</p>
             <ul>
 <li><a class="reference internal" href="#">PyRoki</a><ul>
 <li><a class="reference internal" href="#installation">Installation</a></li>
+<li><a class="reference internal" href="#limitations">Limitations</a></li>
 <li><a class="reference internal" href="#examples">Examples</a></li>
 <li><a class="reference internal" href="#acknowledgements">Acknowledgements</a></li>
 <li><a class="reference internal" href="#citation">Citation</a></li>
