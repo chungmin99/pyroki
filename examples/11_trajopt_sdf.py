@@ -127,19 +127,6 @@ def main(robot_name: Literal["ur5", "panda"] = "panda"):
     ground_coll = pk.collision.HalfSpace.from_point_and_normal(
         np.array([0.0, 0.0, 0.0]), np.array([0.0, 0.0, 1.0])
     )
-    # - Wall
-    wall_height = 0.4
-    wall_width = 0.1
-    wall_length = 0.4
-    wall_intervals = np.arange(start=0.3, stop=wall_length + 0.3, step=0.05)
-    translation = np.concatenate(
-        [
-            wall_intervals.reshape(-1, 1),
-            np.full((wall_intervals.shape[0], 1), 0.0),
-            np.full((wall_intervals.shape[0], 1), wall_height / 2),
-        ],
-        axis=1,
-    )
 
     grid = make_sphere_grid(world_center=jnp.array([0.5, 0.0, 0.18]),
                         radius=0.20)
@@ -163,15 +150,6 @@ def main(robot_name: Literal["ur5", "panda"] = "panda"):
     server = viser.ViserServer()
     urdf_vis = ViserUrdf(server, urdf)
     server.scene.add_grid("/grid", width=2, height=2, cell_size=0.1)
-    server.scene.add_mesh_trimesh(
-        "wall_box",
-        trimesh.creation.box(
-            extents=(wall_length, wall_width, wall_height),
-            transform=trimesh.transformations.translation_matrix(
-                np.array([0.5, 0.0, wall_height / 2])
-            ),
-        ),
-    )
     for name, pos in zip(["start", "end"], [start_pos, end_pos]):
         server.scene.add_frame(
             f"/{name}",
