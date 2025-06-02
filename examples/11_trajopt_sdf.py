@@ -66,44 +66,32 @@ def make_sphere_grid(world_center: jnp.ndarray,
     )
 
 
-def add_sdf_to_viser(server: viser.ViserServer,
-                     name: str,
-                     grid: pk.collision.SDFGrid,
-                     level: float = 0.0,
-                     rgba=(0, 255, 0, 120)):
-    """
-    Extract the iso-surface `grid.sdf == level` and add it to Viser.
+def add_sdf_to_viser(server, name, grid, level=0.0):
+    # ------------ 1. extract mesh in grid frame --------------------
+    sdf_np = np.array(grid.sdf, dtype=np.float32)        # make *writable*
+    sdf_np = sdf_np.transpose(2, 1, 0)                   # (X,Y,Z) for both libs
 
-    Parameters
-    ----------
-    server : viser.ViserServer
-    name   : path under which to insert the mesh (e.g. "/sdf_mesh")
-    grid   : pk.collision.SDFGrid
-    level  : iso-value (0.0 for the surface)
-    rgba   : mesh colour & alpha
-    """
-    # --- 1  marching cubes in *grid* frame --------------------------
-    sdf_np = np.asarray(grid.sdf)                 # (Z, Y, X)
-    # trimesh.voxel expects X,Y,Z ordering
-    sdf_np = sdf_np.transpose(2, 1, 0)            # → (X, Y, Z)
-
-    verts, faces = voxel_ops.matrix_to_marching_cubes(
-        sdf_np, pitch=float(grid.voxel_size[0]), level=level)
-
-    # if voxels are anisotropic, rescale vertices
-    verts *= np.asarray(grid.voxel_size[::-1])    # X,Y,Z order
+    verts, faces = None, None
+    try:
+        # prefer skimage if available
+        from skimage.measure import marching_cubes
+        verts, faces, _, _ = marching_cubes(
+            sdf_np, level=level, spacing=tuple(grid.voxel_size[::-1]))
+    except Exception:
+        # occupancy fallback (dx must equal dy == dz)
+        inside = sdf_np <= level
+        verts, faces = voxel_ops.matrix_to_marching_cubes(
+            inside, pitch=float(grid.voxel_size[0]))
+        verts *= np.asarray(grid.voxel_size[::-1])        # rescale anisotropic
 
     mesh = trimesh.Trimesh(verts, faces, process=False)
 
-    # --- 2  move from grid-local to world frame --------------------
-    mesh.apply_transform(grid.pose.as_matrix())   # 4×4 world←grid
+    # ------------ 2. move to world frame --------------------------
+    mesh.apply_transform(grid.pose.as_matrix())
 
-    # --- 3  send to Viser -----------------------------------------
-    server.scene.add_mesh_trimesh(
-        name=name,
-        mesh=mesh,
-        rgba=rgba,
-    )
+    # ------------ 3. send to Viser -------------------------------
+    server.scene.add_mesh_trimesh(name=name, mesh=mesh)
+
 
 def main(robot_name: Literal["ur5", "panda"] = "panda"):
     if robot_name == "ur5":
