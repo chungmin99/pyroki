@@ -52,7 +52,7 @@ The following are current implementation limitations that could potentially be a
 
 - **Joint types**: We only support revolute, continuous, prismatic, and fixed joints. Other URDF joint types are treated as fixed joints.
 - **Collision geometry**: We are limited to sphere, capsule, halfspace, and heightmap geometries. Mesh collision is approximated as capsules.
-- **Kinematic structures**: We only support kinematic chains; no closed-loop mechanisms or parallel manipulators.
+- **Kinematic structures**: We only support kinematic trees; no closed-loop mechanisms or parallel manipulators.
 
 ## Citation
 
