@@ -15,3 +15,4 @@ htmlcov
 .envrc
 .vite
 build
+venv/
