@@ -16,3 +16,6 @@ htmlcov
 .vite
 build
 venv/
+
+# Examples
+shadowhand_urdf/
