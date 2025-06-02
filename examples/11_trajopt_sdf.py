@@ -117,13 +117,14 @@ def main(robot_name: Literal["ur5", "panda"] = "panda"):
     # ---------------------------------------------------------------------
     # Build a 64³ grid with two obstacles
     # ---------------------------------------------------------------------
-    voxel       = jnp.array([0.02, 0.02, 0.02])          # 2 cm voxels
-    dims_xyz    = (64, 64, 64)
-    origin_xyz  = jnp.array([-0.64, -0.64, -0.02])       # put z=0 roughly in the middle
+    voxel     = jnp.array([0.02, 0.02, 0.02])
+    dims_xyz  = (64, 64, 64)
+    origin_local = -(jnp.array(dims_xyz) * voxel) / 2      # centre at (0,0,0)
+    grid_pts  = make_grid(origin_local, voxel, dims_xyz)
 
-    grid_pts = make_grid(origin_xyz, voxel, dims_xyz)    # (64,64,64,3)
+    # grid_pts = make_grid(origin_xyz, voxel, dims_xyz)    # (64,64,64,3)
     sphere_sdf = sdf_sphere(grid_pts,
-                            centre=jnp.array([0.0, 0.0, 0.25]),
+                            centre=jnp.array([0.0, 0.0, 0.0]),
                             radius=0.50)
 
     box_sdf    = sdf_box(grid_pts,
@@ -132,17 +133,17 @@ def main(robot_name: Literal["ur5", "panda"] = "panda"):
 
     # *union* (can also take min() for intersection, -min(-d) for union of negatives, etc.)
     combined_sdf = jnp.minimum(sphere_sdf, box_sdf)      # (z,y,x)
-    combined_sdf = jnp.minimum(sphere_sdf)
+    combined_sdf = sphere_sdf
 
     # ---------------------------------------------------------------------
     # Wrap it in an SDFGrid CollGeom (see previous answer §1)
     # ---------------------------------------------------------------------
 
     grid = pk.collision.SDFGrid(
-        pose        = jaxlie.SE3.identity(),             # grid frame ≡ world for now
-        size        = voxel,                             # optional; not used for distance
-        sdf         = combined_sdf,                      # (Z,Y,X)
-        voxel_size  = voxel,
+        pose = jaxlie.SE3.from_translation(jnp.array([0.5, 0.0, 0.2])),  # centre of sphere
+        size = voxel,
+        voxel_size = voxel,
+        sdf  = combined_sdf,
     )
 
     # Now `grid_geom` can be appended to your `world_coll` list:
