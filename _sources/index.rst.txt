@@ -70,6 +70,8 @@ Examples
    examples/08_ik_with_mimic_joints
    examples/09_hand_retargeting
    examples/10_humanoid_retargeting
+   examples/11_hand_retargeting_fancy
+   examples/11_humanoid_retargeting_fancy
 
 
 Acknowledgements
