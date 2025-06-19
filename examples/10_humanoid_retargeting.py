@@ -15,7 +15,6 @@ import jaxls
 import numpy as onp
 import pyroki as pk
 import viser
-from pyroki.collision import colldist_from_sdf, collide
 from robot_descriptions.loaders.yourdfpy import load_robot_description
 from viser.extras import ViserUrdf
 
