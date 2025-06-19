@@ -37,7 +37,6 @@ def main():
 
     urdf = load_robot_description("g1_description")
     robot = pk.Robot.from_urdf(urdf)
-    robot_coll = pk.collision.RobotCollision.from_urdf(urdf)
 
     # Load source motion data:
     # - keypoints [N, 45, 3],
