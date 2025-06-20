@@ -647,3 +647,47 @@ class Heightmap(CollGeom):
         heightmap_mesh.apply_transform(tf)
 
         return heightmap_mesh
+
+@jdc.pytree_dataclass
+class SDFGrid(CollGeom):
+    """Axis-aligned voxel grid storing a signed distance in every cell."""
+    sdf: Float[Array, "*batch Z Y X"]      # Z-major so broadcasting matches xyz order
+                                           # (*batch, nz, ny, nx)
+    voxel_size: Float[Array, "*batch 3"]   # (dx, dy, dz) in *world* metres
+
+    # --- helpers ----------------------------------------------------------
+    def _interpolate_sdf(self, pts_w: jax.Array) -> jax.Array:
+        """
+        Trilinear-interpolates the SDF at world points `pts_w` (…, 3).
+
+        Works even when `self.sdf` has *leading* broadcast/batch axes,
+        by feeding constant indices (0) for those axes to
+        `jax.scipy.ndimage.map_coordinates`.
+        """
+        # 1.  world → grid frame, then divide by voxel to get *continuous* indices
+        pts_l  = self.pose.inverse().apply(pts_w) / self.voxel_size[..., None, :]
+        ix, iy, iz = jnp.moveaxis(pts_l, -1, 0)            # (3, …)
+
+        # 2.  Assemble full index array: one entry per sdf dimension
+        extra_axes = self.sdf.ndim - 3                     # leading broadcast dims
+        if extra_axes:                                     # e.g. 1 when shape=(1,Z,Y,X)
+            dummy = jnp.zeros_like(ix)                     # any constant is fine
+            leading = [dummy] * extra_axes                 # len = extra_axes
+            idx = jnp.stack(leading + [iz, iy, ix], axis=0)
+        else:
+            idx = jnp.stack([iz, iy, ix], axis=0)          # (3, …)
+
+        # 3.  Interpolate
+        return jax.scipy.ndimage.map_coordinates(
+            self.sdf, idx, order=1, mode="nearest"
+        )
+
+    # Required override so the visualiser still works (optional)
+    def _create_one_mesh(self, index: tuple) -> trimesh.Trimesh:
+        sdf_i = onp.array(self.sdf[index])
+        verts, faces, _, _ = trimesh.marching_cubes(sdf_i, 0.0)   # iso-0 surface
+        mesh = trimesh.Trimesh(verts * onp.array(self.voxel_size[index]),
+                               faces, process=False)
+        mesh.apply_transform(onp.array(self.pose[index].as_matrix()))
+        return mesh
+
