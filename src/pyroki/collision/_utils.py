@@ -111,3 +111,81 @@ def closest_segment_to_segment_points(
     c1 = a1 + d1 * s_final[..., None]
     c2 = a2 + d2 * t_final[..., None]
     return c1, c2
+
+
+def closest_point_on_triangle(
+    p: Float[Array, "*batch 3"],
+    a: Float[Array, "*batch 3"],
+    b: Float[Array, "*batch 3"],
+    c: Float[Array, "*batch 3"],
+) -> Float[Array, "*batch 3"]:
+    """
+    Get the closest point on triangle abc to point p.
+    Based on the udTriangle algorithm from https://www.iquilezles.org/www/articles/distfunctions/distfunctions.htm.
+    """
+    # Check that the last dimension (coordinates) is 3 for all inputs
+    assert a.shape == b.shape == c.shape == p.shape
+
+    # Compute vectors.
+    ba = b - a
+    pa = p - a
+    cb = c - b
+    pb = p - b
+    ac = a - c
+    pc = p - c
+    nor = jnp.cross(ba, ac)
+
+    # Check if point is inside triangle using cross products.
+    sign1 = jnp.sign(jnp.einsum("...i,...i->...", jnp.cross(ba, nor), pa))
+    sign2 = jnp.sign(jnp.einsum("...i,...i->...", jnp.cross(cb, nor), pb))
+    sign3 = jnp.sign(jnp.einsum("...i,...i->...", jnp.cross(ac, nor), pc))
+
+    is_outside = (sign1 + sign2 + sign3) < 2.0
+
+    # For points outside triangle, find closest point on edges.
+    # Edge AB.
+    t_ab = jnp.clip(
+        jnp.einsum("...i,...i->...", ba, pa)
+        / (jnp.einsum("...i,...i->...", ba, ba) + _SAFE_EPS),
+        0.0,
+        1.0,
+    )
+    closest_ab = a + ba * t_ab[..., None]
+    dist_sq_ab = jnp.sum((closest_ab - p) ** 2, axis=-1)
+
+    # Edge BC.
+    t_bc = jnp.clip(
+        jnp.einsum("...i,...i->...", cb, pb)
+        / (jnp.einsum("...i,...i->...", cb, cb) + _SAFE_EPS),
+        0.0,
+        1.0,
+    )
+    closest_bc = b + cb * t_bc[..., None]
+    dist_sq_bc = jnp.sum((closest_bc - p) ** 2, axis=-1)
+
+    # Edge CA.
+    t_ca = jnp.clip(
+        jnp.einsum("...i,...i->...", ac, pc)
+        / (jnp.einsum("...i,...i->...", ac, ac) + _SAFE_EPS),
+        0.0,
+        1.0,
+    )
+    closest_ca = c + ac * t_ca[..., None]
+    dist_sq_ca = jnp.sum((closest_ca - p) ** 2, axis=-1)
+
+    # Find closest edge point.
+    use_ab = (dist_sq_ab <= dist_sq_bc) & (dist_sq_ab <= dist_sq_ca)
+    use_bc = (~use_ab) & (dist_sq_bc <= dist_sq_ca)
+
+    closest_edge = jnp.where(
+        use_ab[..., None],
+        closest_ab,
+        jnp.where(use_bc[..., None], closest_bc, closest_ca),
+    )
+
+    # For points inside triangle, project onto triangle plane.
+    nor_norm_sq = jnp.sum(nor**2, axis=-1, keepdims=True) + _SAFE_EPS
+    projection_dist = jnp.einsum("...i,...i->...", nor, pa)[..., None] / nor_norm_sq
+    closest_plane = p - nor * projection_dist
+
+    return jnp.where(is_outside[..., None], closest_edge, closest_plane)
