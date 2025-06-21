@@ -49,6 +49,7 @@ class UrdfIK:
         self.slider_handles: List[viser.GuiInputHandle[float]]
         self.initial_config: List[float]
         self.ik_target: viser.TransformControlsHandle
+        self.ik_mode_checkbox: viser.GuiInputHandle[bool]
 
         self._setup_robot_and_gui()
 
@@ -66,7 +67,12 @@ class UrdfIK:
         except Exception as e:
             print(f"[custom_urdf_ik] Error loading URDF: {e}")
             sys.exit(1) # Exit if robot model cannot be loaded
-        
+        with self.server.gui.add_folder("Control Mode"):
+            # GUI checkbox for switching between IK and joint control
+            self.ik_mode_checkbox = self.server.gui.add_checkbox(
+                label="Enable IK Control",
+                initial_value=True, # Start with IK enabled
+            )
         with self.server.gui.add_folder("Joint position control"):
             self.slider_handles, self.initial_config = self._create_robot_control_sliders()
 
@@ -81,7 +87,35 @@ class UrdfIK:
         def _(_):
             for s, init_q in zip(self.slider_handles, self.initial_config):
                 s.value = init_q
-    
+            # When resetting, ensure IK target is also reset to the initial FK position
+            initial_target_position = self._calculate_initial_target_position()
+            self.ik_target.position = initial_target_position
+            self.ik_target.wxyz = (0, 0, 1, 0)
+
+        # Register callback for the IK mode checkbox
+        @self.ik_mode_checkbox.on_update
+        def _(_):
+            self._toggle_control_mode(self.ik_mode_checkbox.value)
+
+        # Initialize the control mode with the initial value of the checkbox
+        self._toggle_control_mode(self.ik_mode_checkbox.value)
+
+    def _toggle_control_mode(self, ik_enabled: bool) -> None:
+        """Toggles between IK control and joint position control."""
+        self.ik_target.visible = ik_enabled
+        self.ik_target.enabled = ik_enabled # Enable/disable IK target
+
+        for slider in self.slider_handles:
+            slider.enabled = not ik_enabled # Disable joint sliders if IK is enabled
+
+        # If switching to joint control, update the robot from current slider values
+        if not ik_enabled:
+            self.viser_urdf.update_cfg(np.array([s.value for s in self.slider_handles]))
+        else:
+            # If switching to IK control, ensure the robot matches the IK target's current position
+            # This is handled in the main loop, but we can also attempt an immediate solve to synchronize.
+            pass
+
     def _setup_grid(self) -> None:
         """
         Sets up the grid in the Viser server, positioning it at the bottom
@@ -154,7 +188,7 @@ class UrdfIK:
                 step=1e-3,
                 initial_value=initial_pos,
             )
-            # The lambda captures `slider_handles` from the outer scope.
+            # This update is only active when IK is OFF.
             slider.on_update(
                 lambda _: self.viser_urdf.update_cfg(
                     np.array([s.value for s in slider_handles])
@@ -176,18 +210,23 @@ class UrdfIK:
         Runs the main loop for the IK application.
         """
         while True:
-            try:
-                ik_solution = pks.solve_ik(
-                    robot=self.robot,
-                    target_link_name=self.target_link_name,
-                    target_position=np.array(self.ik_target.position),
-                    target_wxyz=np.array(self.ik_target.wxyz),
-                )
-                if ik_solution is not None:
-                    for slider, value in zip(self.slider_handles, ik_solution):
-                        slider.value = value
-            except Exception as e:
-                print(f"[custom_urdf_ik] Error solving IK: {e}")
+            if self.ik_mode_checkbox.value:
+                try:
+                    ik_solution = pks.solve_ik(
+                        robot=self.robot,
+                        target_link_name=self.target_link_name,
+                        target_position=np.array(self.ik_target.position),
+                        target_wxyz=np.array(self.ik_target.wxyz),
+                    )
+                    if ik_solution is not None:
+                        for slider, value in zip(self.slider_handles, ik_solution):
+                            slider.value = value
+                        self.viser_urdf.update_cfg(np.array(ik_solution))
+                except Exception as e:
+                    print(f"[custom_urdf_ik] Error solving IK: {e}")
+            else: 
+                # If joint position control is enabled, visualization is already updated with slider.on_update
+                pass
             time.sleep(0.01)
 
 def main(
