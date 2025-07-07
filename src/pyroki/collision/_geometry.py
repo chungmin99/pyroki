@@ -666,16 +666,16 @@ class SDFGrid(CollGeom):
         """
         # 1.  world → grid frame, then divide by voxel to get *continuous* indices
         pts_l  = self.pose.inverse().apply(pts_w) / self.voxel_size[..., None, :]
-        ix, iy, iz = jnp.moveaxis(pts_l, -1, 0)            # (3, …)
+        ix, iy, iz = jnp.moveaxis(pts_l, -1, 0)  # (3, …)
 
         # 2.  Assemble full index array: one entry per sdf dimension
         extra_axes = self.sdf.ndim - 3                     # leading broadcast dims
         if extra_axes:                                     # e.g. 1 when shape=(1,Z,Y,X)
             dummy = jnp.zeros_like(ix)                     # any constant is fine
             leading = [dummy] * extra_axes                 # len = extra_axes
-            idx = jnp.stack(leading + [iz, iy, ix], axis=0)
+            idx = jnp.stack(leading + [ix, iy, iz], axis=0)
         else:
-            idx = jnp.stack([iz, iy, ix], axis=0)          # (3, …)
+            idx = jnp.stack([ix, iy, iz], axis=0)
 
         # 3.  Interpolate
         return jax.scipy.ndimage.map_coordinates(
@@ -685,9 +685,11 @@ class SDFGrid(CollGeom):
     # Required override so the visualiser still works (optional)
     def _create_one_mesh(self, index: tuple) -> trimesh.Trimesh:
         sdf_i = onp.array(self.sdf[index])
-        verts, faces, _, _ = trimesh.marching_cubes(sdf_i, 0.0)   # iso-0 surface
-        mesh = trimesh.Trimesh(verts * onp.array(self.voxel_size[index]),
-                               faces, process=False)
+        sdf_zyx = sdf_i.transpose(2, 1, 0)
+        verts, faces, _, _ = trimesh.marching_cubes(sdf_zyx, 0.0)   # iso-0 surface
+        voxel = onp.array(self.voxel_size[index])  # [dx, dy, dz]
+        mesh = trimesh.Trimesh(verts * voxel, faces, process=False)
+        # place into world frame
         mesh.apply_transform(onp.array(self.pose[index].as_matrix()))
         return mesh
 
