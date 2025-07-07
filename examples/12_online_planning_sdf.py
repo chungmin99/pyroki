@@ -63,31 +63,6 @@ def make_sphere_grid(world_center: jnp.ndarray,
     )
 
 
-def add_sdf_to_viser(server, name, grid, level=0.0):
-    # ------------ 1. extract mesh in grid frame --------------------
-    sdf_np = np.array(grid.sdf, dtype=np.float32)        # make *writable*
-
-    verts, faces = None, None
-    try:
-        # prefer skimage if available
-        from skimage.measure import marching_cubes
-        verts, faces, _, _ = marching_cubes(
-            sdf_np, level=level, spacing=tuple(grid.voxel_size))
-    except Exception:
-        # occupancy fallback (dx must equal dy == dz)
-        inside = sdf_np <= level
-        verts, faces = voxel_ops.matrix_to_marching_cubes(
-            inside, pitch=float(grid.voxel_size[0]))
-        verts *= np.asarray(grid.voxel_size)        # rescale anisotropic
-
-    mesh = trimesh.Trimesh(verts, faces, process=False)
-
-    # ------------ 2. move to world frame --------------------------
-    mesh.apply_transform(grid.pose.as_matrix())
-
-    # ------------ 3. send to Viser -------------------------------
-    server.scene.add_mesh_trimesh(name=name, mesh=mesh)
-
 def main():
     """Main function for online planning with collision."""
     urdf = load_robot_description("panda_description")
@@ -140,7 +115,7 @@ def main():
     grid = make_sphere_grid(world_center=jnp.array([0.5, 0.0, 0.18]),
                         radius=0.20)
 
-    add_sdf_to_viser(server, "/sdf_mesh", grid)
+    server.scene.add_mesh_trimesh("sdf_mesh", grid.to_trimesh())
 
     while True:
         start_time = time.time()

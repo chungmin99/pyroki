@@ -13,6 +13,7 @@ import trimesh
 from jax.typing import ArrayLike
 from jaxtyping import Array, Float
 from typing_extensions import Self
+import skimage
 
 from ._utils import make_frame
 
@@ -683,13 +684,26 @@ class SDFGrid(CollGeom):
         )
 
     # Required override so the visualiser still works (optional)
-    def _create_one_mesh(self, index: tuple) -> trimesh.Trimesh:
-        sdf_i = onp.array(self.sdf[index])
-        sdf_zyx = sdf_i.transpose(2, 1, 0)
-        verts, faces, _, _ = trimesh.marching_cubes(sdf_zyx, 0.0)   # iso-0 surface
-        voxel = onp.array(self.voxel_size[index])  # [dx, dy, dz]
-        mesh = trimesh.Trimesh(verts * voxel, faces, process=False)
-        # place into world frame
-        mesh.apply_transform(onp.array(self.pose[index].as_matrix()))
+    def _create_one_mesh(self, index: tuple[int, ...]) -> trimesh.Trimesh:
+        # 1) extract the Z×Y×X array for this batch‐slice
+        sdf_np = onp.array(self.sdf[index], dtype=onp.float32)
+
+        # 2) run marching‐cubes @ level=0
+        #    spacing needs to be (dz, dy, dx), so we reverse voxel_size
+        verts, faces, normals, values = skimage.measure.marching_cubes(
+            sdf_np,
+            level=0.0,
+            spacing=tuple(self.voxel_size[index][::-1]),
+        )
+
+        # 3) assemble the mesh
+        mesh = trimesh.Trimesh(vertices=verts, faces=faces, process=False)
+
+        # 4) pull out the corresponding pose for this slice
+        pose_i: jaxlie.SE3 = jax.tree.map(lambda x: x[index], self.pose)
+
+        # 5) apply world‐transform
+        mesh.apply_transform(onp.array(pose_i.as_matrix()))
+
         return mesh
 
