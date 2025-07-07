@@ -21,15 +21,13 @@ Please refer to the [documentation](https://chungmin99.github.io/pyroki/) for mo
 
 ## Installation
 
-You can install `pyroki` with `pip`, on Python 3.12+:
+You can install `pyroki` with `pip`, on Python 3.10+:
 
 ```
 git clone https://github.com/chungmin99/pyroki.git
 cd pyroki
 pip install -e .
 ```
-
-Python 3.10-3.11 should also work, but support may be dropped in the future.
 
 ## Status
 

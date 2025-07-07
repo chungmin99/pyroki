@@ -1,11 +1,12 @@
-"""Humanoid Retargeting
+"""Humanoid Retargeting (Fancy)
 
-Simpler motion retargeting to the G1 humanoid.
+Retarget motion to G1 humanoid, with scene contacts (keep feet close to contact
+points, while avoiding world-collisions).
 """
 
 import time
-from pathlib import Path
 from typing import Tuple, TypedDict
+from pathlib import Path
 
 import jax
 import jax.numpy as jnp
@@ -15,8 +16,9 @@ import jaxls
 import numpy as onp
 import pyroki as pk
 import viser
-from robot_descriptions.loaders.yourdfpy import load_robot_description
 from viser.extras import ViserUrdf
+from pyroki.collision import colldist_from_sdf, collide
+from robot_descriptions.loaders.yourdfpy import load_robot_description
 
 from retarget_helpers._utils import (
     SMPL_JOINT_NAMES,
@@ -30,6 +32,14 @@ class RetargetingWeights(TypedDict):
     """Local alignment weight, by matching the relative joint/keypoint positions and angles."""
     global_alignment: float
     """Global alignment weight, by matching the keypoint positions to the robot."""
+    floor_contact: float
+    """Floor contact weight, to place the robot's foot on the floor."""
+    root_smoothness: float
+    """Root smoothness weight, to penalize the robot's root from jittering too much."""
+    foot_skating: float
+    """Foot skating weight, to penalize the robot's foot from moving when it is in contact with the floor."""
+    world_collision: float
+    """World collision weight, to penalize the robot from colliding with the world."""
 
 
 def main():
@@ -37,6 +47,7 @@ def main():
 
     urdf = load_robot_description("g1_description")
     robot = pk.Robot.from_urdf(urdf)
+    robot_coll = pk.collision.RobotCollision.from_urdf(urdf)
 
     # Load source motion data:
     # - keypoints [N, 45, 3],
@@ -83,10 +94,14 @@ def main():
 
     weights = pk.viewer.WeightTuner(
         server,
-        RetargetingWeights(  # type: ignore
+        RetargetingWeights(
             local_alignment=2.0,
             global_alignment=1.0,
-        ),
+            floor_contact=1.0,
+            root_smoothness=1.0,
+            foot_skating=1.0,
+            world_collision=1.0,
+        ),  # type: ignore
     )
 
     Ts_world_root, joints = None, None
@@ -96,10 +111,16 @@ def main():
         gen_button.disabled = True
         Ts_world_root, joints = solve_retargeting(
             robot=robot,
+            robot_coll=robot_coll,
             target_keypoints=smpl_keypoints,
+            is_left_foot_contact=is_left_foot_contact,
+            is_right_foot_contact=is_right_foot_contact,
+            left_foot_keypoints=left_foot_keypoints,
+            right_foot_keypoints=right_foot_keypoints,
             smpl_joint_retarget_indices=smpl_joint_retarget_indices,
             g1_joint_retarget_indices=g1_joint_retarget_indices,
             smpl_mask=smpl_mask,
+            heightmap=heightmap,
             weights=weights.get_weights(),  # type: ignore
         )
         gen_button.disabled = False
@@ -131,10 +152,16 @@ def main():
 @jdc.jit
 def solve_retargeting(
     robot: pk.Robot,
+    robot_coll: pk.collision.RobotCollision,
     target_keypoints: jnp.ndarray,
+    is_left_foot_contact: jnp.ndarray,
+    is_right_foot_contact: jnp.ndarray,
+    left_foot_keypoints: jnp.ndarray,
+    right_foot_keypoints: jnp.ndarray,
     smpl_joint_retarget_indices: jnp.ndarray,
     g1_joint_retarget_indices: jnp.ndarray,
     smpl_mask: jnp.ndarray,
+    heightmap: pk.collision.Heightmap,
     weights: RetargetingWeights,
 ) -> Tuple[jaxlie.SE3, jnp.ndarray]:
     """Solve the retargeting problem."""
@@ -150,6 +177,9 @@ def solve_retargeting(
             for name in ["left_hip_yaw_joint", "right_hip_yaw_joint", "torso_joint"]
         ]
     )
+    # - Foot indices.
+    left_foot_idx = robot.links.names.index("left_ankle_roll_link")
+    right_foot_idx = robot.links.names.index("right_ankle_roll_link")
 
     # Variables.
     class SmplJointsScaleVarG1(
@@ -223,6 +253,22 @@ def solve_retargeting(
         return residual
 
     @jaxls.Cost.create_factory
+    def scale_regularization(
+        var_values: jaxls.VarValues,
+        var_smpl_joints_scale: SmplJointsScaleVarG1,
+    ) -> jax.Array:
+        """Regularize the scale of the retargeted joints."""
+        # Close to 1.
+        res_0 = (var_values[var_smpl_joints_scale] - 1.0).flatten() * 1.0
+        # Symmetric.
+        res_1 = (
+            var_values[var_smpl_joints_scale] - var_values[var_smpl_joints_scale].T
+        ).flatten() * 100.0
+        # Non-negative.
+        res_2 = jnp.clip(-var_values[var_smpl_joints_scale], min=0).flatten() * 100.0
+        return jnp.concatenate([res_0, res_1, res_2])
+
+    @jaxls.Cost.create_factory
     def pc_alignment_cost(
         var_values: jaxls.VarValues,
         var_Ts_world_root: jaxls.SE3Var,
@@ -238,6 +284,143 @@ def solve_retargeting(
         keypoint_pos = keypoints[smpl_joint_retarget_indices]
         return (link_pos - keypoint_pos).flatten() * weights["global_alignment"]
 
+    @jaxls.Cost.create_factory
+    def floor_contact_cost(
+        var_values: jaxls.VarValues,
+        var_Ts_world_root: jaxls.SE3Var,
+        var_robot_cfg: jaxls.Var[jnp.ndarray],
+        var_offset: OffsetVar,
+        is_left_foot_contact: jnp.ndarray,
+        is_right_foot_contact: jnp.ndarray,
+        left_foot_keypoints: jnp.ndarray,
+        right_foot_keypoints: jnp.ndarray,
+    ) -> jax.Array:
+        """Cost to place the robot on the floor:
+        - match foot keypoint positions, and
+        - penalize the foot from tilting too much.
+        """
+        T_world_root = var_values[var_Ts_world_root]
+        T_root_link = jaxlie.SE3(
+            robot.forward_kinematics(cfg=var_values[var_robot_cfg])
+        )
+
+        offset = var_values[var_offset]
+        left_foot_pos = (T_world_root @ T_root_link).translation()[
+            left_foot_idx
+        ] + offset
+        right_foot_pos = (T_world_root @ T_root_link).translation()[
+            right_foot_idx
+        ] + offset
+        left_foot_contact_cost = (
+            is_left_foot_contact * (left_foot_pos - left_foot_keypoints) ** 2
+        )
+        right_foot_contact_cost = (
+            is_right_foot_contact * (right_foot_pos - right_foot_keypoints) ** 2
+        )
+
+        # Also penalize the foot from tilting too much -- keep z axis up!
+        left_foot_ori = (
+            (T_world_root @ T_root_link).rotation().as_matrix()[left_foot_idx]
+        )
+        right_foot_ori = (
+            (T_world_root @ T_root_link).rotation().as_matrix()[right_foot_idx]
+        )
+        left_foot_contact_residual_rot = jnp.where(
+            is_left_foot_contact,
+            left_foot_ori[2, 2] - 1,
+            0.0,
+        )
+        right_foot_contact_residual_rot = jnp.where(
+            is_right_foot_contact,
+            right_foot_ori[2, 2] - 1,
+            0.0,
+        )
+
+        return (
+            jnp.concatenate(
+                [
+                    left_foot_contact_cost.flatten(),
+                    right_foot_contact_cost.flatten(),
+                    left_foot_contact_residual_rot.flatten(),
+                    right_foot_contact_residual_rot.flatten(),
+                ]
+            )
+            * weights["floor_contact"]
+        )
+
+    @jaxls.Cost.create_factory
+    def root_smoothness(
+        var_values: jaxls.VarValues,
+        var_Ts_world_root: jaxls.SE3Var,
+        var_Ts_world_root_prev: jaxls.SE3Var,
+    ) -> jax.Array:
+        """Smoothness cost for the robot root pose."""
+        return (
+            var_values[var_Ts_world_root].inverse() @ var_values[var_Ts_world_root_prev]
+        ).log().flatten() * weights["root_smoothness"]
+
+    @jaxls.Cost.create_factory
+    def skating_cost(
+        var_values: jaxls.VarValues,
+        var_Ts_world_root: jaxls.SE3Var,
+        var_robot_cfg: jaxls.Var[jnp.ndarray],
+        var_offset: OffsetVar,
+        var_Ts_world_root_prev: jaxls.SE3Var,
+        var_robot_cfg_prev: jaxls.Var[jnp.ndarray],
+        var_offset_prev: OffsetVar,
+        is_left_foot_contact: jnp.ndarray,
+        is_right_foot_contact: jnp.ndarray,
+    ) -> jax.Array:
+        """Cost to penalize the robot for skating."""
+        T_world_root = var_values[var_Ts_world_root]
+        robot_cfg = var_values[var_robot_cfg]
+        T_root_link = jaxlie.SE3(robot.forward_kinematics(cfg=robot_cfg))
+        offset = var_values[var_offset]
+        T_link = T_world_root @ T_root_link
+        left_foot_pos = T_link.translation()[left_foot_idx] + offset
+        right_foot_pos = T_link.translation()[right_foot_idx] + offset
+
+        T_world_root_prev = var_values[var_Ts_world_root_prev]
+        robot_cfg_prev = var_values[var_robot_cfg_prev]
+        T_root_link_prev = jaxlie.SE3(robot.forward_kinematics(cfg=robot_cfg_prev))
+        offset_prev = var_values[var_offset_prev]
+        T_link_prev = T_world_root_prev @ T_root_link_prev
+        left_foot_pos_prev = T_link_prev.translation()[left_foot_idx] + offset_prev
+        right_foot_pos_prev = T_link_prev.translation()[right_foot_idx] + offset_prev
+
+        skating_cost_left = is_left_foot_contact * (left_foot_pos - left_foot_pos_prev)
+        skating_cost_right = is_right_foot_contact * (
+            right_foot_pos - right_foot_pos_prev
+        )
+
+        return (
+            jnp.stack([skating_cost_left, skating_cost_right]) * weights["foot_skating"]
+        )
+
+    @jaxls.Cost.create_factory
+    def world_collision_cost(
+        var_values: jaxls.VarValues,
+        var_Ts_world_root: jaxls.SE3Var,
+        var_robot_cfg: jaxls.Var[jnp.ndarray],
+        var_offset: OffsetVar,
+    ) -> jax.Array:
+        """
+        World collision; we intentionally use a low weight --
+        high enough to lift the robot up from the ground, but
+        low enough to not interfere with the retargeting.
+        """
+        Ts_world_root = var_values[var_Ts_world_root]
+        T_offset = jaxlie.SE3.from_translation(var_values[var_offset])
+        transform = T_offset @ Ts_world_root
+
+        robot_cfg = var_values[var_robot_cfg]
+        coll = robot_coll.at_config(robot, robot_cfg)
+        coll = coll.transform(transform)
+
+        dist = collide(coll, heightmap)
+        act = colldist_from_sdf(dist, activation_dist=0.005)
+        return act.flatten() * weights["world_collision"]
+
     costs = [
         # Costs that are relatively self-contained to the robot.
         retargeting_cost(
@@ -246,6 +429,7 @@ def solve_retargeting(
             var_smpl_joints_scale,
             target_keypoints,
         ),
+        scale_regularization(var_smpl_joints_scale),
         pk.costs.limit_cost(
             jax.tree.map(lambda x: x[None], robot),
             var_joints,
@@ -263,11 +447,46 @@ def solve_retargeting(
             .at[joints_to_move_less]
             .set(2.0)[None],
         ),
+        pk.costs.self_collision_cost(
+            jax.tree.map(lambda x: x[None], robot),
+            jax.tree.map(lambda x: x[None], robot_coll),
+            var_joints,
+            margin=0.05,
+            weight=2.0,
+        ),
         # Costs that are scene-centric.
         pc_alignment_cost(
             var_Ts_world_root,
             var_joints,
             target_keypoints,
+        ),
+        floor_contact_cost(
+            var_Ts_world_root,
+            var_joints,
+            var_offset,
+            is_left_foot_contact,
+            is_right_foot_contact,
+            left_foot_keypoints,
+            right_foot_keypoints,
+        ),
+        root_smoothness(
+            jaxls.SE3Var(jnp.arange(1, timesteps)),
+            jaxls.SE3Var(jnp.arange(0, timesteps - 1)),
+        ),
+        skating_cost(
+            jaxls.SE3Var(jnp.arange(1, timesteps)),
+            robot.joint_var_cls(jnp.arange(1, timesteps)),
+            OffsetVar(jnp.arange(1, timesteps)),
+            jaxls.SE3Var(jnp.arange(0, timesteps - 1)),
+            robot.joint_var_cls(jnp.arange(0, timesteps - 1)),
+            OffsetVar(jnp.arange(0, timesteps - 1)),
+            is_left_foot_contact[:-1],
+            is_right_foot_contact[:-1],
+        ),
+        world_collision_cost(
+            var_Ts_world_root,
+            var_joints,
+            var_offset,
         ),
     ]
 
