@@ -43,15 +43,16 @@ def make_sphere_grid(world_center: jnp.ndarray,
     """
     voxel = jnp.asarray(voxel)
     nx, ny, nz = dims
-    # local voxel centres (corner-anchored)
+    # local voxel centres (corner-anchored), stacked straight into (X,Y,Z,3)
     xs = jnp.arange(nx) * voxel[0]
     ys = jnp.arange(ny) * voxel[1]
     zs = jnp.arange(nz) * voxel[2]
-    pts = jnp.stack(jnp.meshgrid(xs, ys, zs, indexing="xy"), axis=-1)
-    pts = jnp.moveaxis(pts, 2, 0)                     # (z,y,x,3)
+    # with “ij” indexing, meshgrid gives (nx,ny,nz) for X,Y,Z respectively
+    pts = jnp.stack(jnp.meshgrid(xs, ys, zs, indexing="ij"), axis=-1)
+    # -> pts.shape == (X, Y, Z, 3)
 
     idx_half = (jnp.asarray(dims) - 1) / 2            # 31.5,31.5,31.5
-    local_center = idx_half * voxel                   # metres in grid frame
+    local_center = idx_half * voxel                   # meters in grid frame
 
     sdf = jnp.linalg.norm(pts - local_center, axis=-1) - radius
 
@@ -69,20 +70,19 @@ def make_sphere_grid(world_center: jnp.ndarray,
 def add_sdf_to_viser(server, name, grid, level=0.0):
     # ------------ 1. extract mesh in grid frame --------------------
     sdf_np = np.array(grid.sdf, dtype=np.float32)        # make *writable*
-    sdf_np = sdf_np.transpose(2, 1, 0)                   # (X,Y,Z) for both libs
 
     verts, faces = None, None
     try:
         # prefer skimage if available
         from skimage.measure import marching_cubes
         verts, faces, _, _ = marching_cubes(
-            sdf_np, level=level, spacing=tuple(grid.voxel_size[::-1]))
+            sdf_np, level=level, spacing=tuple(grid.voxel_size))
     except Exception:
         # occupancy fallback (dx must equal dy == dz)
         inside = sdf_np <= level
         verts, faces = voxel_ops.matrix_to_marching_cubes(
             inside, pitch=float(grid.voxel_size[0]))
-        verts *= np.asarray(grid.voxel_size[::-1])        # rescale anisotropic
+        verts *= np.asarray(grid.voxel_size)        # rescale anisotropic
 
     mesh = trimesh.Trimesh(verts, faces, process=False)
 
