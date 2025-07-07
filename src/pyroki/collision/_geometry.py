@@ -656,16 +656,16 @@ class SDFGrid(CollGeom):
     voxel_size: Float[Array, "*batch 3"]   # (dx, dy, dz) in *world* meters
 
     # --- helpers ----------------------------------------------------------
-    def _get_distance_at_point(self, pts_w: jax.Array) -> jax.Array:
+    def _get_distance_at_point(self, world_coords: jax.Array) -> jax.Array:
         """
-        Trilinear-interpolates the SDF at world points `pts_w` (…, 3).
+        Trilinear-interpolates the SDF at world points `world_coords` (…, 3).
 
         Works even when `self.sdf` has *leading* broadcast/batch axes,
         by feeding constant indices (0) for those axes to
         `jax.scipy.ndimage.map_coordinates`.
         """
         # 1.  world → grid frame, then divide by voxel to get *continuous* indices
-        pts_l  = self.pose.inverse().apply(pts_w) / self.voxel_size[..., None, :]
+        pts_l  = self.pose.inverse().apply(world_coords) / self.voxel_size[..., None, :]
         ix, iy, iz = jnp.moveaxis(pts_l, -1, 0)  # (3, …)
 
         # 2.  Assemble full index array: one entry per sdf dimension
