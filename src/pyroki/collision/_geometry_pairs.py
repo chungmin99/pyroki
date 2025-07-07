@@ -219,7 +219,7 @@ def heightmap_halfspace(
 
 def sdfgrid_sphere(grid: SDFGrid, sph: Sphere) -> Float[Array, "*batch"]:
     # signed distance at the centre minus radius
-    d = grid._interpolate_sdf(sph.pose.translation()) - sph.radius
+    d = grid._get_distance_at_point(sph.pose.translation()) - sph.radius
     return d
 
 def sdfgrid_capsule(grid: SDFGrid, cap: Capsule,
@@ -227,5 +227,5 @@ def sdfgrid_capsule(grid: SDFGrid, cap: Capsule,
     # sample N points along the capsule axis, take min(dist - radius)
     seg = jnp.linspace(-0.5, 0.5, n)[..., None] * cap.height[..., None]
     pts_c = cap.axis[..., None, :] * seg + cap.pose.translation()[..., None, :]
-    d = grid._interpolate_sdf(pts_c) - cap.radius[..., None]
+    d = grid._get_distance_at_point(pts_c) - cap.radius[..., None]
     return jnp.min(d, axis=-1)

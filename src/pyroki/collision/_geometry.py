@@ -653,10 +653,10 @@ class SDFGrid(CollGeom):
     """Axis-aligned voxel grid storing a signed distance in every cell."""
     sdf: Float[Array, "*batch Z Y X"]      # Z-major so broadcasting matches xyz order
                                            # (*batch, nz, ny, nx)
-    voxel_size: Float[Array, "*batch 3"]   # (dx, dy, dz) in *world* metres
+    voxel_size: Float[Array, "*batch 3"]   # (dx, dy, dz) in *world* meters
 
     # --- helpers ----------------------------------------------------------
-    def _interpolate_sdf(self, pts_w: jax.Array) -> jax.Array:
+    def _get_distance_at_point(self, pts_w: jax.Array) -> jax.Array:
         """
         Trilinear-interpolates the SDF at world points `pts_w` (…, 3).
 
