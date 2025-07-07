@@ -656,6 +656,47 @@ class SDFGrid(CollGeom):
                                            # (*batch, nz, ny, nx)
     voxel_size: Float[Array, "*batch 3"]   # (dx, dy, dz) in *world* meters
 
+    # --- constructors ---------------------------------------------------
+    @staticmethod
+    def from_mesh(
+        mesh: trimesh.Trimesh,
+        voxel_size: ArrayLike | tuple[float, float, float],
+        dims: tuple[int, int, int] | None = None,
+        padding: float = 1.0,
+    ) -> SDFGrid:
+        # 1) Bounding box
+        bmin, bmax = mesh.bounds
+        vx = onp.array(voxel_size, float)
+
+        bmin = bmin - padding
+        bmax = bmax + padding
+
+        # 2) Infer dims if needed
+        if dims is None:
+            span = bmax - bmin
+            dims = tuple(onp.ceil(span / vx).astype(int))
+        nx, ny, nz = dims
+
+        # 3) Sample‐point grid at voxel‐centers (corner‐anchored)
+        xs = onp.linspace(bmin[0]+vx[0]/2, bmin[0]+(nx-0.5)*vx[0], nx)
+        ys = onp.linspace(bmin[1]+vx[1]/2, bmin[1]+(ny-0.5)*vx[1], ny)
+        zs = onp.linspace(bmin[2]+vx[2]/2, bmin[2]+(nz-0.5)*vx[2], nz)
+        X, Y, Z = onp.meshgrid(xs, ys, zs, indexing="ij")
+        pts = onp.vstack([X.ravel(), Y.ravel(), Z.ravel()]).T  # (N,3)
+
+        # 4) Signed‐distance query
+        signed = trimesh.proximity.signed_distance(mesh, pts)  # (N,)
+
+        # 5) Reshape into (nx,ny,nz)
+        sdf_np = signed.reshape((nx, ny, nz)).astype(onp.float32)
+
+        # 6) Wrap as JAX arrays
+        sdf = jnp.array(sdf_np)
+        voxel = jnp.array(vx)
+        pose  = jaxlie.SE3.from_translation(bmin)
+
+        return SDFGrid(pose=pose, voxel_size=voxel, size=voxel, sdf=sdf)
+
     # --- helpers ----------------------------------------------------------
     def _get_distance_at_point(self, world_coords: jax.Array) -> jax.Array:
         """
