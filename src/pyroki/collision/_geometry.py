@@ -684,11 +684,14 @@ class SDFGrid(CollGeom):
         X, Y, Z = onp.meshgrid(xs, ys, zs, indexing="ij")
         pts = onp.vstack([X.ravel(), Y.ravel(), Z.ravel()]).T  # (N,3)
 
-        # 4) Signed‐distance query
-        signed = trimesh.proximity.signed_distance(mesh, pts)  # (N,)
+        # 4) Signed‐distance query, swap to positive outside convention
+        signed = -1.0 * trimesh.proximity.signed_distance(mesh, pts)  # (N,)
 
         # 5) Reshape into (nx,ny,nz)
         sdf_np = signed.reshape((nx, ny, nz)).astype(onp.float32)
+
+        # Subtract distance from grid to ensure mesh is non-permeable in between mesh nodes
+        sdf_np = sdf_np - min(voxel_size) / 2.0
 
         # 6) Wrap as JAX arrays
         sdf = jnp.array(sdf_np)
