@@ -13,6 +13,7 @@ import trimesh
 from jax.typing import ArrayLike
 from jaxtyping import Array, Float
 from typing_extensions import Self
+import skimage
 
 from ._utils import make_frame
 
@@ -647,3 +648,106 @@ class Heightmap(CollGeom):
         heightmap_mesh.apply_transform(tf)
 
         return heightmap_mesh
+
+@jdc.pytree_dataclass
+class SDFGrid(CollGeom):
+    """Axis-aligned voxel grid storing a signed distance in every cell."""
+    sdf: Float[Array, "*batch Z Y X"]      # Z-major so broadcasting matches xyz order
+                                           # (*batch, nz, ny, nx)
+    voxel_size: Float[Array, "*batch 3"]   # (dx, dy, dz) in *world* meters
+
+    # --- constructors ---------------------------------------------------
+    @staticmethod
+    def from_mesh(
+        mesh: trimesh.Trimesh,
+        voxel_size: ArrayLike | tuple[float, float, float],
+        dims: tuple[int, int, int] | None = None,
+        padding: float = 1.0,
+    ) -> SDFGrid:
+        # 1) Bounding box
+        bmin, bmax = mesh.bounds
+        vx = onp.array(voxel_size, float)
+
+        bmin = bmin - padding
+        bmax = bmax + padding
+
+        # 2) Infer dims if needed
+        if dims is None:
+            span = bmax - bmin
+            dims = tuple(onp.ceil(span / vx).astype(int))
+        nx, ny, nz = dims
+
+        # 3) Sample‐point grid at voxel‐centers (corner‐anchored)
+        xs = onp.linspace(bmin[0]+vx[0]/2, bmin[0]+(nx-0.5)*vx[0], nx)
+        ys = onp.linspace(bmin[1]+vx[1]/2, bmin[1]+(ny-0.5)*vx[1], ny)
+        zs = onp.linspace(bmin[2]+vx[2]/2, bmin[2]+(nz-0.5)*vx[2], nz)
+        X, Y, Z = onp.meshgrid(xs, ys, zs, indexing="ij")
+        pts = onp.vstack([X.ravel(), Y.ravel(), Z.ravel()]).T  # (N,3)
+
+        # 4) Signed‐distance query, swap to positive outside convention
+        signed = -1.0 * trimesh.proximity.signed_distance(mesh, pts)  # (N,)
+
+        # 5) Reshape into (nx,ny,nz)
+        sdf_np = signed.reshape((nx, ny, nz)).astype(onp.float32)
+
+        # Subtract distance from grid to ensure mesh is non-permeable in between mesh nodes
+        sdf_np = sdf_np - min(voxel_size) / 2.0
+
+        # 6) Wrap as JAX arrays
+        sdf = jnp.array(sdf_np)
+        voxel = jnp.array(vx)
+        pose  = jaxlie.SE3.from_translation(bmin)
+
+        return SDFGrid(pose=pose, voxel_size=voxel, size=voxel, sdf=sdf)
+
+    # --- helpers ----------------------------------------------------------
+    def _get_distance_at_point(self, world_coords: jax.Array) -> jax.Array:
+        """
+        Trilinear-interpolates the SDF at world points `world_coords` (…, 3).
+
+        Works even when `self.sdf` has *leading* broadcast/batch axes,
+        by feeding constant indices (0) for those axes to
+        `jax.scipy.ndimage.map_coordinates`.
+        """
+        # 1.  world → grid frame, then divide by voxel to get *continuous* indices
+        pts_l  = self.pose.inverse().apply(world_coords) / self.voxel_size[..., None, :]
+        ix, iy, iz = jnp.moveaxis(pts_l, -1, 0)  # (3, …)
+
+        # 2.  Assemble full index array: one entry per sdf dimension
+        extra_axes = self.sdf.ndim - 3                     # leading broadcast dims
+        if extra_axes:                                     # e.g. 1 when shape=(1,Z,Y,X)
+            dummy = jnp.zeros_like(ix)                     # any constant is fine
+            leading = [dummy] * extra_axes                 # len = extra_axes
+            idx = jnp.stack(leading + [ix, iy, iz], axis=0)
+        else:
+            idx = jnp.stack([ix, iy, iz], axis=0)
+
+        # 3.  Interpolate
+        return jax.scipy.ndimage.map_coordinates(
+            self.sdf, idx, order=1, mode="nearest"
+        )
+
+    # Required override so the visualiser still works (optional)
+    def _create_one_mesh(self, index: tuple[int, ...]) -> trimesh.Trimesh:
+        # 1) extract the Z×Y×X array for this batch‐slice
+        sdf_np = onp.array(self.sdf[index], dtype=onp.float32)
+
+        # 2) run marching‐cubes @ level=0
+        #    spacing needs to be (dz, dy, dx), so we reverse voxel_size
+        verts, faces, normals, values = skimage.measure.marching_cubes(
+            sdf_np,
+            level=0.0,
+            spacing=tuple(self.voxel_size[index][::-1]),
+        )
+
+        # 3) assemble the mesh
+        mesh = trimesh.Trimesh(vertices=verts, faces=faces, process=False)
+
+        # 4) pull out the corresponding pose for this slice
+        pose_i: jaxlie.SE3 = jax.tree.map(lambda x: x[index], self.pose)
+
+        # 5) apply world‐transform
+        mesh.apply_transform(onp.array(pose_i.as_matrix()))
+
+        return mesh
+
