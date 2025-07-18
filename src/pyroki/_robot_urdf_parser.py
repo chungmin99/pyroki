@@ -116,7 +116,76 @@ class JointInfo:
         Returns:
             Full configuration vector.
         """
+        # Enhanced input validation
+        batch_axes = cfg_actuated.shape[:-1]
+        assert cfg_actuated.shape == (*batch_axes, self.num_actuated_joints), (
+            f"Actuated configuration shape mismatch. Expected (*batch, {self.num_actuated_joints}), "
+            f"got {cfg_actuated.shape}. Batch axes: {batch_axes}"
+        )
+        
+        # Verify joint structural arrays haven't been inadvertently batched
+        self.assert_no_batched()
+        
         return self._map_to_full_joint_space(cfg_actuated, apply_offset=True)
+
+    def assert_no_batched(self) -> None:
+        """Assert that structural arrays haven't been inadvertently batched.
+        
+        This method checks that all joint structural arrays have their expected shapes,
+        catching cases where jax.tree.map(lambda x: x[None], robot) has been used
+        incorrectly to batch the robot structure.
+        
+        Raises:
+            AssertionError: If any structural array has been batched.
+        """
+        # Check core structural arrays
+        assert self.twists.shape == (self.num_joints, 6), (
+            f"Joint twists has unexpected shape {self.twists.shape}, "
+            f"expected ({self.num_joints}, 6). This suggests the robot structure has been batched. "
+            f"Use batched configurations instead of batching the robot."
+        )
+        
+        assert self.parent_transforms.shape == (self.num_joints, 7), (
+            f"Joint parent_transforms has unexpected shape {self.parent_transforms.shape}, "
+            f"expected ({self.num_joints}, 7). This suggests the robot structure has been batched. "
+            f"Use batched configurations instead of batching the robot."
+        )
+        
+        assert self.parent_indices.shape == (self.num_joints,), (
+            f"Joint parent_indices has unexpected shape {self.parent_indices.shape}, "
+            f"expected ({self.num_joints},). This suggests the robot structure has been batched. "
+            f"Use batched configurations instead of batching the robot."
+        )
+        
+        assert self.actuated_indices.shape == (self.num_joints,), (
+            f"Joint actuated_indices has unexpected shape {self.actuated_indices.shape}, "
+            f"expected ({self.num_joints},). This suggests the robot structure has been batched. "
+            f"Use batched configurations instead of batching the robot."
+        )
+        
+        assert self.mimic_act_indices.shape == (self.num_joints,), (
+            f"Joint mimic_act_indices has unexpected shape {self.mimic_act_indices.shape}, "
+            f"expected ({self.num_joints},). This suggests the robot structure has been batched. "
+            f"Use batched configurations instead of batching the robot."
+        )
+        
+        assert self.mimic_multiplier.shape == (self.num_joints,), (
+            f"Joint mimic_multiplier has unexpected shape {self.mimic_multiplier.shape}, "
+            f"expected ({self.num_joints},). This suggests the robot structure has been batched. "
+            f"Use batched configurations instead of batching the robot."
+        )
+        
+        assert self.mimic_offset.shape == (self.num_joints,), (
+            f"Joint mimic_offset has unexpected shape {self.mimic_offset.shape}, "
+            f"expected ({self.num_joints},). This suggests the robot structure has been batched. "
+            f"Use batched configurations instead of batching the robot."
+        )
+        
+        assert self._topo_sort_inv.shape == (self.num_joints,), (
+            f"Joint _topo_sort_inv has unexpected shape {self._topo_sort_inv.shape}, "
+            f"expected ({self.num_joints},). This suggests the robot structure has been batched. "
+            f"Use batched configurations instead of batching the robot."
+        )
 
 
 @jdc.pytree_dataclass
@@ -126,6 +195,22 @@ class LinkInfo:
     num_links: jdc.Static[int]
     names: jdc.Static[tuple[str, ...]]
     parent_joint_indices: Int[Array, "n_links"]
+
+    def assert_no_batched(self) -> None:
+        """Assert that structural arrays haven't been inadvertently batched.
+        
+        This method checks that all link structural arrays have their expected shapes,
+        catching cases where jax.tree.map(lambda x: x[None], robot) has been used
+        incorrectly to batch the robot structure.
+        
+        Raises:
+            AssertionError: If any structural array has been batched.
+        """
+        assert self.parent_joint_indices.shape == (self.num_links,), (
+            f"Link parent_joint_indices has unexpected shape {self.parent_joint_indices.shape}, "
+            f"expected ({self.num_links},). This suggests the robot structure has been batched. "
+            f"Use batched configurations instead of batching the robot."
+        )
 
 
 class RobotURDFParser:

@@ -62,6 +62,19 @@ class Robot:
 
         return robot
 
+    def assert_no_batched(self) -> None:
+        """Assert that robot structural arrays haven't been inadvertently batched.
+        
+        This is a convenience method that validates the robot structure integrity.
+        It's automatically called by forward_kinematics and other methods, but can
+        be called explicitly for debugging.
+        
+        Raises:
+            AssertionError: If any structural array has been batched.
+        """
+        self.joints.assert_no_batched()
+        self.links.assert_no_batched()
+
     @jdc.jit
     def forward_kinematics(
         self,
@@ -81,7 +94,16 @@ class Robot:
             in the format `(*batch, link_count, wxyz_xyz)`.
         """
         batch_axes = cfg.shape[:-1]
-        assert cfg.shape == (*batch_axes, self.joints.num_actuated_joints)
+        
+        # Enhanced input validation with helpful error messages
+        assert cfg.shape == (*batch_axes, self.joints.num_actuated_joints), (
+            f"Configuration shape mismatch. Expected (*batch, {self.joints.num_actuated_joints}), "
+            f"got {cfg.shape}. Batch axes: {batch_axes}"
+        )
+        
+        # Verify robot structural arrays haven't been inadvertently batched
+        self.assert_no_batched()
+        
         return self._link_poses_from_joint_poses(
             self._forward_kinematics_joints(cfg, unroll_fk)
         )
@@ -90,6 +112,16 @@ class Robot:
         self, Ts_world_joint: Float[Array, "*batch actuated_count 7"]
     ) -> Float[Array, "*batch link_count 7"]:
         (*batch_axes, _, _) = Ts_world_joint.shape
+        
+        # Enhanced input validation
+        assert Ts_world_joint.shape == (*batch_axes, self.joints.num_joints, 7), (
+            f"Joint poses shape mismatch. Expected (*batch, {self.joints.num_joints}, 7), "
+            f"got {Ts_world_joint.shape}. Batch axes: {batch_axes}"
+        )
+        
+        # Verify link structural arrays haven't been inadvertently batched
+        self.links.assert_no_batched()
+        
         # Get the link poses.
         base_link_mask = self.links.parent_joint_indices == -1
         parent_joint_indices = jnp.where(
@@ -101,7 +133,10 @@ class Robot:
             identity_pose,
             Ts_world_joint[..., parent_joint_indices, :],
         )
-        assert Ts_world_link.shape == (*batch_axes, self.links.num_links, 7)
+        assert Ts_world_link.shape == (*batch_axes, self.links.num_links, 7), (
+            f"Output link poses shape mismatch. Expected (*batch, {self.links.num_links}, 7), "
+            f"got {Ts_world_link.shape}. Batch axes: {batch_axes}"
+        )
         return Ts_world_link
 
     def _forward_kinematics_joints(
