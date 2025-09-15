@@ -68,14 +68,12 @@ This codebase is released with the following preprint.
 Please cite PyRoki if you find this work useful for your research:
 
 ```
-@misc{pyroki2025,
-    title={PyRoki: A Modular Toolkit for Robot Kinematic Optimization},
-    author={Chung Min Kim* and Brent Yi* and Hongsuk Choi and Yi Ma and Ken Goldberg and Angjoo Kanazawa},
-    year={2025},
-    eprint={2505.03728},
-    archivePrefix={arXiv},
-    primaryClass={cs.RO},
-    url={https://arxiv.org/abs/2505.03728},
+@inproceedings{kim2025pyroki,
+  title={PyRoki: A Modular Toolkit for Robot Kinematic Optimization},
+  author={Kim*, Chung Min and Yi*, Brent and Choi, Hongsuk and Ma, Yi and Goldberg, Ken and Kanazawa, Angjoo},
+  booktitle={2025 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS)},
+  year={2025},
+  url={https://arxiv.org/abs/2505.03728},
 }
 ```
 

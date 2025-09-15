@@ -93,13 +93,11 @@ If you find this work useful, please cite it as follows:
 
 .. code-block:: bibtex
 
-   @misc{pyroki2025,
+   @inproceedings{kim2025pyroki,
       title={PyRoki: A Modular Toolkit for Robot Kinematic Optimization},
-      author={Chung Min Kim* and Brent Yi* and Hongsuk Choi and Yi Ma and Ken Goldberg and Angjoo Kanazawa},
+      author={Kim*, Chung Min and Yi*, Brent and Choi, Hongsuk and Ma, Yi and Goldberg, Ken and Kanazawa, Angjoo},
+      booktitle={2025 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS)},
       year={2025},
-      eprint={2505.03728},
-      archivePrefix={arXiv},
-      primaryClass={cs.RO},
       url={https://arxiv.org/abs/2505.03728},
    }
 
