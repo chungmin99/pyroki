@@ -3,7 +3,7 @@ from __future__ import annotations
 import jax.numpy as jnp
 from jaxtyping import Float, Array
 
-from ._geometry import HalfSpace, Sphere, Capsule, Heightmap
+from ._geometry import HalfSpace, Sphere, Capsule, Heightmap, SDFGrid
 from . import _utils
 
 
@@ -216,3 +216,16 @@ def heightmap_halfspace(
     min_dist = jnp.min(vertex_distances, axis=-1)
     assert min_dist.shape == batch_axes
     return min_dist
+
+def sdfgrid_sphere(grid: SDFGrid, sph: Sphere) -> Float[Array, "*batch"]:
+    # signed distance at the centre minus radius
+    d = grid._get_distance_at_point(sph.pose.translation()) - sph.radius
+    return d
+
+def sdfgrid_capsule(grid: SDFGrid, cap: Capsule,
+                    n=5) -> Float[Array, "*batch"]:
+    # sample N points along the capsule axis, take min(dist - radius)
+    seg = jnp.linspace(-0.5, 0.5, n)[..., None] * cap.height[..., None]
+    pts_c = cap.axis[..., None, :] * seg + cap.pose.translation()[..., None, :]
+    d = grid._get_distance_at_point(pts_c) - cap.radius[..., None]
+    return jnp.min(d, axis=-1)
