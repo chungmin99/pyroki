@@ -11,7 +11,7 @@ from jax.typing import ArrayLike
 from jaxtyping import Float
 
 from ._robot_urdf_parser import JointInfo, LinkInfo, RobotURDFParser
-from ._robot_xml_parser import RobotXMLParser
+from ._robot_xml_parser import RobotMJCFParser
 
 @jdc.pytree_dataclass
 class Robot:
@@ -27,15 +27,15 @@ class Robot:
     """Variable class for the robot configuration."""
 
     @staticmethod
-    def from_xml(
-        xml: str,
+    def from_mjcf(
+        mjcf: str,
         default_joint_cfg: Float[ArrayLike, "*batch actuated_count"] | None = None,
     ) -> Robot:
         """
-        Loads a robot kinematic tree from a XML.
+        Loads a robot kinematic tree from a MJCF.
         """
 
-        joints, links = RobotXMLParser.parse(xml)
+        joints, links = RobotMJCFParser.parse(mjcf)
 
         # Compute default joint configuration.
         if default_joint_cfg is None:

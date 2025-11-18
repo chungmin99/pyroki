@@ -1,3 +1,5 @@
+"""MJCF parsing utilities for Robot class."""
+
 import xml.etree.ElementTree as ET
 from ._robot_urdf_parser import JointInfo, LinkInfo
 from jax import Array
@@ -45,7 +47,10 @@ def euler_xyz_to_rotmat(euler):
     return Rz @ Ry @ Rx
 
 
-class RobotXMLParser:
+class RobotMJCFParser:
+    """
+    Parser for MuJoCo XML files.
+    """
     _euler_seq: str = "XYZ"
     _angle_scale: float = 1.0
     _total_link_count: int = 0
@@ -70,8 +75,8 @@ class RobotXMLParser:
             return jaxlie.SE3.from_matrix(T)
         elif "euler" in element.attrib:
             euler = element.attrib["euler"]
-            seq = RobotXMLParser._euler_seq
-            scale = RobotXMLParser._angle_scale
+            seq = RobotMJCFParser._euler_seq
+            scale = RobotMJCFParser._angle_scale
             euler = {axis: float(x) for axis, x in zip(seq, euler.split())}
             euler_xyz = [euler[axis] for axis in seq]
             euler_xyz = jnp.array(euler_xyz) * scale
@@ -141,8 +146,8 @@ class RobotXMLParser:
         site_pos = [float(x) for x in site_pos.split()]
         site_pos = jnp.array(site_pos)
         site_euler = element.attrib.get("euler", "0 0 0")
-        seq = RobotXMLParser._euler_seq
-        scale = RobotXMLParser._angle_scale
+        seq = RobotMJCFParser._euler_seq
+        scale = RobotMJCFParser._angle_scale
         site_euler = {axis: float(x) for axis, x in zip(seq, site_euler.split())}
         site_euler_xyz = [site_euler[axis] for axis in seq]
         site_euler_xyz = jnp.array(site_euler_xyz) * scale
@@ -179,10 +184,10 @@ class RobotXMLParser:
         Traverse the XML tree and collect the information.
         """
 
-        current_link_idx = RobotXMLParser._total_link_count
-        RobotXMLParser._total_link_count += 1
+        current_link_idx = RobotMJCFParser._total_link_count
+        RobotMJCFParser._total_link_count += 1
         link_name_list.append(element.attrib.get("name", "worldbody"))
-        T_parent_link_list.append(RobotXMLParser._get_T_parent_link(element))
+        T_parent_link_list.append(RobotMJCFParser._get_T_parent_link(element))
 
         has_joint = False
         joint_element: ET.Element | None = None
@@ -190,15 +195,15 @@ class RobotXMLParser:
             if child.tag == "joint" :
                 assert not has_joint, "Only one joint is allowed per link"
                 joint_name_list.append(child.attrib.get("name", None))
-                T_joint_link_list.append(RobotXMLParser._get_T_link_joint(child).inverse())
+                T_joint_link_list.append(RobotMJCFParser._get_T_link_joint(child).inverse())
                 has_joint = True
                 joint_element = child
-                limit_low, limit_high, limit_vel = RobotXMLParser._get_limits_joint(child)
+                limit_low, limit_high, limit_vel = RobotMJCFParser._get_limits_joint(child)
                 lower_limits_list.append(limit_low)
                 upper_limits_list.append(limit_high)
                 velocity_limits_list.append(limit_vel)
-                actuated_indices_list.append(RobotXMLParser._num_actuated_joints)
-                RobotXMLParser._num_actuated_joints += 1
+                actuated_indices_list.append(RobotMJCFParser._num_actuated_joints)
+                RobotMJCFParser._num_actuated_joints += 1
 
         if not has_joint :
             joint_name_list.append(None)
@@ -236,14 +241,14 @@ class RobotXMLParser:
                 )
             T_parent_joint_list.append(T_parent_joint)
             parent_indices_list.append(parent_link_idx)
-            joint_twist_list.append(RobotXMLParser._get_twist_joint(joint_element))
+            joint_twist_list.append(RobotMJCFParser._get_twist_joint(joint_element))
             lower_limits_all_list.append(limit_low)
             upper_limits_all_list.append(limit_high)
             velocity_limits_all_list.append(limit_vel)
 
         for child in element :
             if child.tag == "site" :
-                site_name, T_link_site = RobotXMLParser._get_site_info(child)
+                site_name, T_link_site = RobotMJCFParser._get_site_info(child)
                 site_name_list.append(site_name)
                 site_parent_joint_idx_list.append(current_link_idx)
                 T_joint_site_list.append(
@@ -252,7 +257,7 @@ class RobotXMLParser:
 
         for child in element:
             if child.tag == "body" :
-                RobotXMLParser._traverse(
+                RobotMJCFParser._traverse(
                     child,
                     current_link_idx,
                     T_joint_link_list,
@@ -313,24 +318,24 @@ class RobotXMLParser:
         site_parent_joint_idx_list = list[int]()
         T_joint_site_list = list[jaxlie.SE3]()
         # Counts
-        RobotXMLParser._total_link_count = 0
-        RobotXMLParser._num_actuated_joints = 0
+        RobotMJCFParser._total_link_count = 0
+        RobotMJCFParser._num_actuated_joints = 0
 
         # Get compiler eulerseq
         compiler = root.find("compiler")
         if compiler is not None:
-            angle_attr = compiler.attrib.get("angle", RobotXMLParser._angle_scale)
+            angle_attr = compiler.attrib.get("angle", RobotMJCFParser._angle_scale)
             if angle_attr == "degree":
-                RobotXMLParser._angle_scale = jnp.pi / 180.0
+                RobotMJCFParser._angle_scale = jnp.pi / 180.0
             elif angle_attr == "radian":
-                RobotXMLParser._angle_scale = 1.0
+                RobotMJCFParser._angle_scale = 1.0
             else:
-                RobotXMLParser._angle_scale = float(angle_attr)
-            RobotXMLParser._euler_seq = compiler.attrib.get(
-                "eulerseq", RobotXMLParser._euler_seq
+                RobotMJCFParser._angle_scale = float(angle_attr)
+            RobotMJCFParser._euler_seq = compiler.attrib.get(
+                "eulerseq", RobotMJCFParser._euler_seq
             )
 
-        RobotXMLParser._traverse(
+        RobotMJCFParser._traverse(
             root.find("worldbody"),
             -1,
             T_joint_link_list,
@@ -358,8 +363,8 @@ class RobotXMLParser:
         ]
 
         joint_info = JointInfo(
-            num_joints = RobotXMLParser._total_link_count,
-            num_actuated_joints = RobotXMLParser._num_actuated_joints,
+            num_joints = RobotMJCFParser._total_link_count,
+            num_actuated_joints = RobotMJCFParser._num_actuated_joints,
             twists = jnp.array(joint_twist_list),
             parent_transforms = jnp.array(T_parent_joint_list),
             parent_indices = jnp.array(parent_indices_list),
@@ -372,10 +377,10 @@ class RobotXMLParser:
             lower_limits_all = jnp.array(lower_limits_all_list),
             upper_limits_all = jnp.array(upper_limits_all_list),
             velocity_limits_all = jnp.array(velocity_limits_all_list),
-            mimic_multiplier = jnp.ones(RobotXMLParser._total_link_count),
-            mimic_offset = jnp.zeros(RobotXMLParser._total_link_count),
-            mimic_act_indices = jnp.ones(RobotXMLParser._total_link_count, dtype=jnp.int32) * -1,
-            _topo_sort_inv = jnp.arange(RobotXMLParser._total_link_count),
+            mimic_multiplier = jnp.ones(RobotMJCFParser._total_link_count),
+            mimic_offset = jnp.zeros(RobotMJCFParser._total_link_count),
+            mimic_act_indices = jnp.ones(RobotMJCFParser._total_link_count, dtype=jnp.int32) * -1,
+            _topo_sort_inv = jnp.arange(RobotMJCFParser._total_link_count),
         )
         assert joint_info.twists.shape == (joint_info.num_joints, 6)
         assert joint_info.parent_transforms.shape == (joint_info.num_joints, 7)
