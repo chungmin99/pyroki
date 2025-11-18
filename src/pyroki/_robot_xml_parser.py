@@ -175,12 +175,14 @@ class RobotXMLParser:
         site_parent_joint_idx_list: list[int],
         T_joint_site_list: list[jaxlie.SE3]
         ) -> None:
+        """
+        Traverse the XML tree and collect the information.
+        """
 
         current_link_idx = RobotXMLParser._total_link_count
         RobotXMLParser._total_link_count += 1
         link_name_list.append(element.attrib.get("name", "worldbody"))
         T_parent_link_list.append(RobotXMLParser._get_T_parent_link(element))
-        # limit_low, limit_high, limit_vel = -jnp.inf, jnp.inf, jnp.inf
 
         has_joint = False
         joint_element: ET.Element | None = None
@@ -201,9 +203,6 @@ class RobotXMLParser:
         if not has_joint :
             joint_name_list.append(None)
             T_joint_link_list.append(jaxlie.SE3.identity())
-            # lower_limits_list.append(0)
-            # upper_limits_list.append(0)
-            # velocity_limits_list.append(0)
             actuated_indices_list.append(-1)
             if parent_link_idx >= 0 :
                 T_parent_joint_list.append(
@@ -222,14 +221,6 @@ class RobotXMLParser:
             lower_limits_all_list.append(0)
             upper_limits_all_list.append(0)
             velocity_limits_all_list.append(0)
-            # if direct_parent_link_idx >= 0:
-            #     T_parent_link_list[-1] = (
-            #         T_parent_link_list[direct_parent_link_idx] @ T_parent_link_list[-1]
-            #     )
-            # else :
-            #     T_parent_link_list[-1] = jaxlie.SE3.identity()
-            # joint_name_list.append(None)
-            # T_joint_link_list.append(jaxlie.SE3.identity())
         else :
             assert joint_element is not None, "Joint element expected when has_joint is True"
             if parent_link_idx >= 0:
@@ -258,19 +249,6 @@ class RobotXMLParser:
                 T_joint_site_list.append(
                     T_joint_link_list[current_link_idx] @ T_link_site
                 )
-
-        # T_parent_joint_list.append(
-        #     T_joint_link_list[parent_link_idx].inverse()
-        #     @ T_parent_link_list[current_link_idx]
-        #     @ T_joint_link_list[current_link_idx]
-        # )
-        # parent_indices_list.append(parent_link_idx)
-        # joint_twist_list.append(
-        #     RobotXMLParser._get_twist_joint(element)
-        # )
-        # lower_limits_all_list.append(limit_low)
-        # upper_limits_all_list.append(limit_high)
-        # velocity_limits_all_list.append(limit_vel)
 
         for child in element:
             if child.tag == "body" :
@@ -338,29 +316,7 @@ class RobotXMLParser:
         RobotXMLParser._total_link_count = 0
         RobotXMLParser._num_actuated_joints = 0
 
-        # joint_twists_list = list[Array]()
-        # joint_parent_transform_list = list[Array]()
-        # joint_parent_joint_idx_list = list[int]()
-        # actuated_idx_list = list[int]()
-        # lower_limit_act_list = list[float]()
-        # upper_limit_act_list = list[float]()
-        # velocity_limit_act_list = list[float]()
-        # joint_name_list = list[str]()
-        # actuated_name_list = list[str]()
-        # mimic_multiplier_list = list[float]()
-        # mimic_offset_list = list[float]()
-        # mimic_act_idx_list = list[int]()
-
-        # # Store limits read directly from URDF for *all* joints -> _eff
-        # lower_limit_eff_list = list[float]()
-        # upper_limit_eff_list = list[float]()
-        # velocity_limit_eff_list = list[float]()
-
-        # # Link information.
-        # link_name_list = list[str]()
-        # link_parent_joint_idx_list = list[int]()
-
-        # get compiler eulerseq
+        # Get compiler eulerseq
         compiler = root.find("compiler")
         if compiler is not None:
             angle_attr = compiler.attrib.get("angle", RobotXMLParser._angle_scale)
@@ -436,9 +392,7 @@ class RobotXMLParser:
         assert joint_info.mimic_offset.shape == (joint_info.num_joints,)
         assert joint_info.mimic_act_indices.shape == (joint_info.num_joints,)
 
-        # import ipdb
-        # ipdb.set_trace()
-
+        # Combined links and sites
         num_links_sites = len(link_name_list) + len(site_name_list)
         names_links_sites = link_name_list + site_name_list
         parent_joint_indices = jnp.concatenate([
