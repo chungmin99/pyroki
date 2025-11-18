@@ -11,7 +11,7 @@ from jax.typing import ArrayLike
 from jaxtyping import Float
 
 from ._robot_urdf_parser import JointInfo, LinkInfo, RobotURDFParser
-
+from ._robot_xml_parser import RobotXMLParser
 
 @jdc.pytree_dataclass
 class Robot:
@@ -25,6 +25,36 @@ class Robot:
 
     joint_var_cls: jdc.Static[type[jaxls.Var[Array]]]
     """Variable class for the robot configuration."""
+
+    @staticmethod
+    def from_xml(
+        xml: str,
+        default_joint_cfg: Float[ArrayLike, "*batch actuated_count"] | None = None,
+    ) -> Robot:
+        """
+        Loads a robot kinematic tree from a XML.
+        """
+
+        joints, links = RobotXMLParser.parse(xml)
+
+        # Compute default joint configuration.
+        if default_joint_cfg is None:
+            default_joint_cfg = (joints.lower_limits + joints.upper_limits) / 2
+        else:
+            default_joint_cfg = jnp.array(default_joint_cfg)
+        assert default_joint_cfg.shape == (joints.num_actuated_joints,)
+
+        # Variable class for the robot configuration.
+        class JointVar(  # pylint: disable=missing-class-docstring
+            jaxls.Var[Array],
+            default_factory=lambda: default_joint_cfg,
+        ): ...
+
+        return Robot(
+            joints=joints,
+            links=links,
+            joint_var_cls=JointVar,
+        )
 
     @staticmethod
     def from_urdf(
@@ -62,7 +92,7 @@ class Robot:
 
         return robot
 
-    @jdc.jit
+    # @jdc.jit
     def forward_kinematics(
         self,
         cfg: Float[Array, "*batch actuated_count"],
@@ -96,11 +126,26 @@ class Robot:
             base_link_mask, 0, self.links.parent_joint_indices
         )
         identity_pose = jaxlie.SE3.identity().wxyz_xyz
-        Ts_world_link = jnp.where(
+        Ts_world_parent_joint = jnp.where(
             base_link_mask[..., None],
             identity_pose,
             Ts_world_joint[..., parent_joint_indices, :],
         )
+
+        # Broadcast the joint-to-link transform so it can be applied per-link and per-batch.
+        T_parent_joint_link = self.links.T_parent_joint_link
+        T_parent_joint_link = jnp.reshape(
+            T_parent_joint_link,
+            (1,) * len(batch_axes) + (self.links.num_links, 7),
+        )
+        T_parent_joint_link = jnp.broadcast_to(
+            T_parent_joint_link,
+            (*batch_axes, self.links.num_links, 7),
+        )
+
+        Ts_world_link = (
+            jaxlie.SE3(Ts_world_parent_joint) @ jaxlie.SE3(T_parent_joint_link)
+        ).wxyz_xyz
         assert Ts_world_link.shape == (*batch_axes, self.links.num_links, 7)
         return Ts_world_link
 
