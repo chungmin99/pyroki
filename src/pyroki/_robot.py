@@ -92,7 +92,7 @@ class Robot:
 
         return robot
 
-    # @jdc.jit
+    @jdc.jit
     def forward_kinematics(
         self,
         cfg: Float[Array, "*batch actuated_count"],
