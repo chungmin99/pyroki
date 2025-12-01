@@ -284,24 +284,46 @@ def sphere_box(sphere: Sphere, box: Box) -> Float[Array, "*batch"]:
     )
 
 
-def capsule_box(capsule: Capsule, box: Box) -> Float[Array, "*batch"]:
-    """Calculate distance between a capsule and a box.
+def _point_to_box_sdf(
+    point: Float[Array, "*batch 3"],
+    half_ext: Float[Array, "*batch 3"],
+) -> Float[Array, "*batch"]:
+    """Signed distance from a point to an AABB centered at origin."""
+    q = jnp.abs(point) - half_ext
+    outside_dist = jnp.linalg.norm(jnp.maximum(q, 0.0), axis=-1)
+    inside_dist = jnp.minimum(jnp.max(q, axis=-1), 0.0)
+    return outside_dist + inside_dist
 
-    Conservative approximation: checks the two endpoint spheres of the capsule.
-    May miss collisions where the capsule body (but not endpoints) intersects the box.
+
+def capsule_box(capsule: Capsule, box: Box) -> Float[Array, "*batch"]:
+    """Calculate signed distance between a capsule and a box.
+
+    Uses iterative closest point refinement between capsule axis and box,
+    then computes proper signed distance using box SDF.
     """
     cap_pos = capsule.pose.translation()
     cap_axis = capsule.axis
     cap_radius = capsule.radius
     segment_offset = cap_axis * capsule.height[..., None] / 2
 
-    # Two endpoint positions
-    p1 = cap_pos + segment_offset
-    p2 = cap_pos - segment_offset
+    # Capsule endpoints in world frame
+    p1_world = cap_pos + segment_offset
+    p2_world = cap_pos - segment_offset
 
-    # Compute sphere-box distance for each endpoint
-    dist1 = _sphere_box_dist(p1, cap_radius, box)
-    dist2 = _sphere_box_dist(p2, cap_radius, box)
+    # Transform to box's local frame (box becomes AABB centered at origin)
+    p1_local = box.pose.inverse().apply(p1_world)
+    p2_local = box.pose.inverse().apply(p2_world)
+    half_ext = box.half_extent
 
-    # Return minimum distance
-    return jnp.minimum(dist1, dist2)
+    # Iteration 1: closest point on segment to box center (origin)
+    center = jnp.zeros_like(p1_local)
+    pt_seg = _utils.closest_segment_point(p1_local, p2_local, center)
+    pt_box = jnp.clip(pt_seg, -half_ext, half_ext)
+
+    # Iteration 2: refine with closest point on segment to pt_box
+    pt_seg = _utils.closest_segment_point(p1_local, p2_local, pt_box)
+
+    # Compute signed distance from segment point to box
+    sdf = _point_to_box_sdf(pt_seg, half_ext)
+
+    return sdf - cap_radius
