@@ -289,10 +289,20 @@ def _point_to_box_sdf(
     half_ext: Float[Array, "*batch 3"],
 ) -> Float[Array, "*batch"]:
     """Signed distance from a point to an AABB centered at origin."""
-    q = jnp.abs(point) - half_ext
-    outside_dist = jnp.linalg.norm(jnp.maximum(q, 0.0), axis=-1)
-    inside_dist = jnp.minimum(jnp.max(q, axis=-1), 0.0)
-    return outside_dist + inside_dist
+    # Clamp point to box bounds
+    closest = jnp.clip(point, -half_ext, half_ext)
+
+    # Distance to closest point on box surface (with safe gradient via epsilon)
+    diff = point - closest
+    _, dist = _utils.normalize_with_norm(diff)
+
+    # For inside case: compute penetration depth as distance to nearest face
+    face_dists = half_ext - jnp.abs(point)  # Distance to each face (positive inside)
+    min_face_dist = jnp.min(face_dists, axis=-1)
+
+    # If inside (dist ~= 0), return negative penetration; otherwise return positive dist
+    is_inside = dist < 1e-5
+    return jnp.where(is_inside, -min_face_dist, dist)
 
 
 def capsule_box(capsule: Capsule, box: Box) -> Float[Array, "*batch"]:
