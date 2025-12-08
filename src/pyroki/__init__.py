@@ -1,5 +1,6 @@
+from . import _constraints as constraints
+from . import _costs as costs
 from . import collision as collision
-from . import costs as costs
 from . import viewer as viewer
 from ._robot import Robot as Robot
 
