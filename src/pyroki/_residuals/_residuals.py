@@ -260,6 +260,33 @@ def five_point_acceleration_residual(
     return (acceleration * weight).flatten()
 
 
+def limit_acceleration_residual(
+    vals: VarValues,
+    var_t: Var[Array],
+    var_t_plus_2: Var[Array],
+    var_t_plus_1: Var[Array],
+    var_t_minus_1: Var[Array],
+    var_t_minus_2: Var[Array],
+    dt: float,
+    acceleration_limit: Array | float,
+    weight: Array | float = 1.0,
+) -> Array:
+    """Computes joint acceleration limit violation residual using 5-point stencil.
+
+    Returns values that are:
+    - Positive when violated (|acceleration| > limit)
+    - Negative when satisfied (|acceleration| <= limit)
+    """
+    q_tm2 = vals[var_t_minus_2]
+    q_tm1 = vals[var_t_minus_1]
+    q_t = vals[var_t]
+    q_tp1 = vals[var_t_plus_1]
+    q_tp2 = vals[var_t_plus_2]
+
+    acceleration = (-q_tp2 + 16 * q_tp1 - 30 * q_t + 16 * q_tm1 - q_tm2) / (12 * dt**2)
+    return ((jnp.abs(acceleration) - acceleration_limit) * weight).flatten()
+
+
 def five_point_jerk_residual(
     vals: VarValues,
     var_t_plus_3: Var[Array],
@@ -283,3 +310,34 @@ def five_point_jerk_residual(
         8 * dt**3
     )
     return (jerk * weight).flatten()
+
+
+def limit_jerk_residual(
+    vals: VarValues,
+    var_t_plus_3: Var[Array],
+    var_t_plus_2: Var[Array],
+    var_t_plus_1: Var[Array],
+    var_t_minus_1: Var[Array],
+    var_t_minus_2: Var[Array],
+    var_t_minus_3: Var[Array],
+    dt: float,
+    jerk_limit: Array | float,
+    weight: Array | float = 1.0,
+) -> Array:
+    """Computes joint jerk limit violation residual using 7-point stencil.
+
+    Returns values that are:
+    - Positive when violated (|jerk| > limit)
+    - Negative when satisfied (|jerk| <= limit)
+    """
+    q_tm3 = vals[var_t_minus_3]
+    q_tm2 = vals[var_t_minus_2]
+    q_tm1 = vals[var_t_minus_1]
+    q_tp1 = vals[var_t_plus_1]
+    q_tp2 = vals[var_t_plus_2]
+    q_tp3 = vals[var_t_plus_3]
+
+    jerk = (-q_tp3 + 8 * q_tp2 - 13 * q_tp1 + 13 * q_tm1 - 8 * q_tm2 + q_tm3) / (
+        8 * dt**3
+    )
+    return ((jnp.abs(jerk) - jerk_limit) * weight).flatten()
