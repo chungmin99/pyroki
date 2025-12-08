@@ -12,6 +12,8 @@ from ._pose_residual_numerical_jac import pose_cost_numerical_jac as pose_cost_n
 from ._residuals import five_point_acceleration_residual as five_point_acceleration_residual
 from ._residuals import five_point_jerk_residual as five_point_jerk_residual
 from ._residuals import five_point_velocity_residual as five_point_velocity_residual
+from ._residuals import limit_acceleration_residual as limit_acceleration_residual
+from ._residuals import limit_jerk_residual as limit_jerk_residual
 from ._residuals import limit_residual as limit_residual
 from ._residuals import limit_velocity_residual as limit_velocity_residual
 from ._residuals import manipulability_residual as manipulability_residual
