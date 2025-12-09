@@ -174,7 +174,7 @@ def solve_retargeting(
     joints_to_move_less = jnp.array(
         [
             robot.joints.actuated_names.index(name)
-            for name in ["left_hip_yaw_joint", "right_hip_yaw_joint", "torso_joint"]
+            for name in ["left_hip_yaw_joint", "right_hip_yaw_joint", "waist_yaw_joint"]
         ]
     )
     # - Foot indices.
