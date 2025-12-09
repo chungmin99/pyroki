@@ -232,8 +232,9 @@ def solve_retargeting(
     var_smpl_joints_scale = ManoJointsScaleVar(jnp.zeros(timesteps))
     var_offset = OffsetVar(jnp.zeros(timesteps))
 
-    # Costs.
+    # Costs and constraints.
     costs: list[jaxls.Cost] = []
+    constraints: list[jaxls.Constraint] = []
 
     @jaxls.Cost.create_factory
     def retargeting_cost(
@@ -387,11 +388,6 @@ def solve_retargeting(
             target_keypoints,
         ),
         scale_regularization(var_smpl_joints_scale),
-        pk.costs.limit_cost(
-            jax.tree.map(lambda x: x[None], robot),
-            var_joints,
-            100.0,
-        ),
         pk.costs.smoothness_cost(
             robot.joint_var_cls(jnp.arange(1, timesteps)),
             robot.joint_var_cls(jnp.arange(0, timesteps - 1)),
@@ -421,12 +417,23 @@ def solve_retargeting(
         ),
     ]
 
+    constraints = [
+        pk.constraints.limit_constraint(
+            jax.tree.map(lambda x: x[None], robot),
+            var_joints,
+        ),
+    ]
+
     solution = (
         jaxls.LeastSquaresProblem(
-            costs, [var_joints, var_Ts_world_root, var_smpl_joints_scale, var_offset]
+            costs=costs,
+            variables=[var_joints, var_Ts_world_root, var_smpl_joints_scale, var_offset],
+            constraints=constraints,
         )
         .analyze()
-        .solve()
+        .solve(
+            augmented_lagrangian=jaxls.AugmentedLagrangianConfig(max_iterations=5),
+        )
     )
     transform = solution[var_Ts_world_root]
     offset = solution[var_offset]

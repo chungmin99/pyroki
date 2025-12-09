@@ -14,7 +14,6 @@ from ._residuals import (
     limit_jerk_residual,
     limit_residual,
     limit_velocity_residual,
-    self_collision_residual,
     world_collision_residual,
 )
 
