@@ -94,7 +94,8 @@ def _solve_online_planning_jax(
     )
 
     # --- Define Costs ---
-    factors: list[jaxls.Cost] = []  # Changed type hint to jaxls.Cost
+    costs: list[jaxls.Cost] = []
+    constraints: list[jaxls.Constraint] = []
 
     @jaxls.Cost.create_factory(name="SE3PoseMatchJointCost")
     def match_joint_to_pose_cost(
@@ -136,7 +137,7 @@ def _solve_online_planning_jax(
         return (vals[joint_var] - start_cfg).flatten() * 100.0
 
     # Add pose costs.
-    factors.extend(
+    costs.extend(
         [
             pose_match_cost(
                 BatchedSE3Var(timesteps - 1),
@@ -149,10 +150,13 @@ def _solve_online_planning_jax(
     )
 
     # Need to constrain the start joint cfg.
-    factors.append(match_start_pose_cost(robot.joint_var_cls(0)))
+    costs.append(match_start_pose_cost(robot.joint_var_cls(0)))
 
     # Add joint costs.
-    factors.extend(
+    robot_batched = jax.tree.map(lambda x: x[None], robot)
+    robot_coll_batched = jax.tree.map(lambda x: x[None], robot_coll)
+
+    costs.extend(
         [
             match_joint_to_pose_cost(
                 traj_var,
@@ -163,46 +167,46 @@ def _solve_online_planning_jax(
                 traj_var_next,
                 weight=10.0,
             ),
-            pk.costs.limit_velocity_cost(
-                jax.tree.map(lambda x: x[None], robot),
-                traj_var_prev,
-                traj_var_next,
-                weight=10.0,
-                dt=dt,
-            ),
-            pk.costs.limit_cost(
-                jax.tree.map(lambda x: x[None], robot),
-                traj_var,
-                weight=100.0,
-            ),
             pk.costs.rest_cost(
                 traj_var,
                 jnp.array(traj_var.default_factory())[None],
                 weight=0.01,
             ),
             pk.costs.manipulability_cost(
-                jax.tree.map(lambda x: x[None], robot),
+                robot_batched,
                 traj_var,
                 weight=0.01,
                 target_link_indices=target_links,
             ),
             pk.costs.self_collision_cost(
-                jax.tree.map(lambda x: x[None], robot),
-                jax.tree.map(lambda x: x[None], robot_coll),
+                robot_batched,
+                robot_coll_batched,
                 traj_var,
                 weight=10.0,
                 margin=0.02,
             ),
         ]
     )
-    factors.extend(
+
+    # Add hard constraints.
+    constraints.extend(
         [
-            pk.costs.world_collision_cost(
-                jax.tree.map(lambda x: x[None], robot),
-                jax.tree.map(lambda x: x[None], robot_coll),
+            pk.constraints.limit_constraint(robot_batched, traj_var),
+            pk.constraints.limit_velocity_constraint(
+                robot_batched,
+                traj_var_next,
+                traj_var_prev,
+                dt=dt,
+            ),
+        ]
+    )
+    constraints.extend(
+        [
+            pk.constraints.world_collision_constraint(
+                robot_batched,
+                robot_coll_batched,
                 traj_var,
                 jax.tree.map(lambda x: x[None], obs),
-                weight=20.0,
                 margin=0.1,
             )
             for obs in world_coll
@@ -210,7 +214,11 @@ def _solve_online_planning_jax(
     )
 
     solution = (
-        jaxls.LeastSquaresProblem(factors, [traj_var, pose_var])
+        jaxls.LeastSquaresProblem(
+            costs=costs,
+            variables=[traj_var, pose_var],
+            constraints=constraints,
+        )
         .analyze()
         .solve(
             verbose=False,
@@ -218,6 +226,7 @@ def _solve_online_planning_jax(
                 (traj_var.with_value(prev_sols), pose_var.with_value(init_pose_vals))
             ),
             termination=jaxls.TerminationConfig(max_iterations=20),
+            augmented_lagrangian=jaxls.AugmentedLagrangianConfig(max_iterations=5),
         )
     )
     pose_traj = solution[pose_var]

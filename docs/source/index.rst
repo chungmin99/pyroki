@@ -42,7 +42,7 @@ Python 3.10-3.11 should also work, but support may be dropped in the future.
 Limitations
 -----------
 
-- **Soft constraints only**: We use a nonlinear least-squares formulation and model joint limits, collision avoidance, etc. as soft penalties with high weights rather than hard constraints.
+- **Hard constraints via augmented Lagrangian**: We support both soft penalties (costs) and hard constraints. Hard constraints use an augmented Lagrangian formulation for joint limits, collision avoidance, etc.
 - **Static shapes & JIT overhead**: JAX JIT compilation is triggered on first run and when input shapes change (e.g., number of targets, obstacles). Arrays can be pre-padded to vectorize over inputs with different shapes.
 - **No sampling-based planners**: We don't include sampling-based planners (e.g., graphs, trees).
 - **Collision performance**: Speed and accuracy comparisons against other robot toolkits such as CuRobo have not been extensively performed, and is likely slower than other toolkits for collision-heavy scenarios.
