@@ -393,7 +393,6 @@ class Box(CollGeom):
 
     def get_corners_local(self) -> Float[Array, "*batch 8 3"]:
         """Get the 8 corners of the box in local frame."""
-        batch_axes = self.get_batch_axes()
         half = self.half_extent
 
         # 8 corners from all combinations of +/- half extents
