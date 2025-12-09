@@ -100,10 +100,11 @@ def limit_velocity_residual(
 
     Returns values that are:
     - Positive when violated (|velocity| > limit)
-    - Negative when satisfied (|velocity| <= limit)
+    - Zero when satisfied (|velocity| <= limit)
     """
     joint_vel = (vals[joint_var] - vals[prev_joint_var]) / dt
-    return ((jnp.abs(joint_vel) - robot.joints.velocity_limits) * weight).flatten()
+    residual = jnp.maximum(0.0, jnp.abs(joint_vel) - robot.joints.velocity_limits)
+    return (residual * weight).flatten()
 
 
 # --- Regularization Residuals ---
