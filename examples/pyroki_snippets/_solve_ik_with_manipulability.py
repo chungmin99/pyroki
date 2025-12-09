@@ -89,7 +89,9 @@ def _solve_ik_jax(
         ),
     ]
     sol = (
-        jaxls.LeastSquaresProblem(costs=costs, variables=variables, constraints=constraints)
+        jaxls.LeastSquaresProblem(
+            costs=costs, variables=variables, constraints=constraints
+        )
         .analyze()
         .solve(verbose=False, linear_solver="dense_cholesky")
     )

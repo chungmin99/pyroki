@@ -87,12 +87,12 @@ def solve_trajopt(
         pk.constraints.limit_constraint(robot, traj_vars),
         # Start / end pose constraints.
         jaxls.Constraint(
-            lambda vals, var: ((vals[var] - start_cfg)).flatten(),
+            lambda vals, var: (vals[var] - start_cfg).flatten(),
             (robot.joint_var_cls(jnp.arange(0, 2)),),
             name="start_pose_constraint",
         ),
         jaxls.Constraint(
-            lambda vals, var: ((vals[var] - end_cfg)).flatten(),
+            lambda vals, var: (vals[var] - end_cfg).flatten(),
             (robot.joint_var_cls(jnp.arange(timesteps - 2, timesteps)),),
             name="end_pose_constraint",
         ),
@@ -187,7 +187,7 @@ def solve_iks_with_collision(
     # Small cost to encourage the start + end configs to be close to each other.
     @jaxls.Cost.create_factory(name="JointSimilarityCost")
     def joint_similarity_cost(vals, var_0, var_1):
-        return ((vals[var_0] - vals[var_1])).flatten()
+        return (vals[var_0] - vals[var_1]).flatten()
 
     costs.append(joint_similarity_cost(joint_var_0, joint_var_1))
 

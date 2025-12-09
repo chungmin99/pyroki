@@ -496,7 +496,12 @@ def solve_retargeting(
     solution = (
         jaxls.LeastSquaresProblem(
             costs=costs,
-            variables=[var_joints, var_Ts_world_root, var_smpl_joints_scale, var_offset],
+            variables=[
+                var_joints,
+                var_Ts_world_root,
+                var_smpl_joints_scale,
+                var_offset,
+            ],
             constraints=constraints,
         )
         .analyze()

@@ -16,9 +16,7 @@ from ._residuals import (
 )
 
 # Limit constraints
-limit_constraint = Constraint.create_factory(
-    limit_residual, constraint_type="leq_zero"
-)
+limit_constraint = Constraint.create_factory(limit_residual, constraint_type="leq_zero")
 limit_velocity_constraint = Constraint.create_factory(
     limit_velocity_residual, constraint_type="leq_zero"
 )

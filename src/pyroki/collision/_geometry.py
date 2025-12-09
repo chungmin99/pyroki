@@ -396,16 +396,18 @@ class Box(CollGeom):
         half = self.half_extent
 
         # 8 corners from all combinations of +/- half extents
-        signs = jnp.array([
-            [-1, -1, -1],
-            [-1, -1, +1],
-            [-1, +1, -1],
-            [-1, +1, +1],
-            [+1, -1, -1],
-            [+1, -1, +1],
-            [+1, +1, -1],
-            [+1, +1, +1],
-        ])  # (8, 3)
+        signs = jnp.array(
+            [
+                [-1, -1, -1],
+                [-1, -1, +1],
+                [-1, +1, -1],
+                [-1, +1, +1],
+                [+1, -1, -1],
+                [+1, -1, +1],
+                [+1, +1, -1],
+                [+1, +1, +1],
+            ]
+        )  # (8, 3)
 
         # Broadcast: half is (*batch, 3), signs is (8, 3)
         # Result: (*batch, 8, 3)

@@ -227,9 +227,7 @@ def halfspace_box(halfspace: HalfSpace, box: Box) -> Float[Array, "*batch"]:
     Computes signed distance of all 8 corners to the halfspace plane,
     returns the minimum (most penetrating corner).
     """
-    batch_axes = jnp.broadcast_shapes(
-        halfspace.get_batch_axes(), box.get_batch_axes()
-    )
+    batch_axes = jnp.broadcast_shapes(halfspace.get_batch_axes(), box.get_batch_axes())
 
     # Get box corners in world frame: (*batch, 8, 3)
     corners = box.get_corners_world()
