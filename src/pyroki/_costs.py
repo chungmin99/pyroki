@@ -12,8 +12,6 @@ from ._residuals import (
     limit_residual,
     limit_velocity_residual,
     manipulability_residual,
-    pose_cost_analytic_jac,
-    pose_cost_numerical_jac,
     pose_residual,
     pose_with_base_residual,
     rest_residual,
@@ -22,14 +20,16 @@ from ._residuals import (
     smoothness_residual,
     world_collision_residual,
 )
+from ._residuals._pose_residual_analytic_jac import (
+    pose_cost_analytic_jac as pose_cost_analytic_jac,
+)
+from ._residuals._pose_residual_numerical_jac import (
+    pose_cost_numerical_jac as pose_cost_numerical_jac,
+)
 
 # Pose costs
 pose_cost = Cost.create_factory(pose_residual)
 pose_cost_with_base = Cost.create_factory(pose_with_base_residual)
-
-# Specialized pose costs with custom Jacobians (already wrapped)
-pose_cost_analytic_jac = pose_cost_analytic_jac
-pose_cost_numerical_jac = pose_cost_numerical_jac
 
 # Limit costs
 limit_cost = Cost.create_factory(limit_residual)
