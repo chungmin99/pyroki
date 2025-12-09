@@ -143,6 +143,7 @@ G1_LINK_NAMES = [
     "right_rubber_hand",
 ]
 
+
 def get_humanoid_retarget_indices() -> tuple[jnp.ndarray, jnp.ndarray]:
     smpl_joint_retarget_indices_to_g1 = []
     g1_joint_retarget_indices = []

@@ -7,9 +7,15 @@ These functions have the same signature as cost/constraint functions
     limit_constraint = Constraint.create_factory(limit_residual, constraint_type="leq_zero")
 """
 
-from ._pose_residual_analytic_jac import pose_cost_analytic_jac as pose_cost_analytic_jac
-from ._pose_residual_numerical_jac import pose_cost_numerical_jac as pose_cost_numerical_jac
-from ._residuals import five_point_acceleration_residual as five_point_acceleration_residual
+from ._pose_residual_analytic_jac import (
+    pose_cost_analytic_jac as pose_cost_analytic_jac,
+)
+from ._pose_residual_numerical_jac import (
+    pose_cost_numerical_jac as pose_cost_numerical_jac,
+)
+from ._residuals import (
+    five_point_acceleration_residual as five_point_acceleration_residual,
+)
 from ._residuals import five_point_jerk_residual as five_point_jerk_residual
 from ._residuals import five_point_velocity_residual as five_point_velocity_residual
 from ._residuals import limit_acceleration_residual as limit_acceleration_residual
