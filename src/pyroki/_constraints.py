@@ -10,8 +10,6 @@ Constraint semantics:
 from jaxls import Constraint
 
 from ._residuals import (
-    limit_acceleration_residual,
-    limit_jerk_residual,
     limit_residual,
     limit_velocity_residual,
     world_collision_residual,
@@ -23,12 +21,6 @@ limit_constraint = Constraint.create_factory(
 )
 limit_velocity_constraint = Constraint.create_factory(
     limit_velocity_residual, constraint_type="leq_zero"
-)
-limit_acceleration_constraint = Constraint.create_factory(
-    limit_acceleration_residual, constraint_type="leq_zero"
-)
-limit_jerk_constraint = Constraint.create_factory(
-    limit_jerk_residual, constraint_type="leq_zero"
 )
 
 # Collision constraints
