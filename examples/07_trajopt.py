@@ -50,9 +50,9 @@ def main(robot_name: Literal["ur5", "panda"] = "panda"):
 
     # Define the obstacles:
     # - Ground
-    ground_coll = pk.collision.HalfSpace.from_point_and_normal(
-        np.array([0.0, 0.0, 0.0]), np.array([0.0, 0.0, 1.0])
-    )
+    # ground_coll = pk.collision.HalfSpace.from_point_and_normal(
+    #     np.array([0.0, 0.0, 0.0]), np.array([0.0, 0.0, 1.0])
+    # )
     # - Wall (using Box collision geometry)
     wall_height = 0.4
     wall_width = 0.1
@@ -63,9 +63,10 @@ def main(robot_name: Literal["ur5", "panda"] = "panda"):
     )
     # world_coll = [ground_coll, wall_coll]
 
-    # TODO: constraints don't work with ground collision at the moment,
-    # because the robot is in collision already (and destabilizes things).
-    world_coll = [wall_coll]  # temporarily removed ground collision
+    # TODO: Constraints don't work with ground collision at the moment,
+    # because the robot is in collision already with it (which destabilizes things).
+    # We will fix this if we can have better robot collision geometries / handling.
+    world_coll = [wall_coll]
 
     traj = pks.solve_trajopt(
         robot,

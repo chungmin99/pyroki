@@ -53,13 +53,11 @@ def solve_trajopt(
 
     # --- Soft costs ---
     costs: list[jaxls.Cost] = [
-        # Regularization: bias towards rest pose
         pk.costs.rest_cost(
             traj_vars,
             traj_vars.default_factory()[None],
             jnp.array([0.01])[None],
         ),
-        # Smoothness: penalize joint differences between timesteps
         pk.costs.smoothness_cost(
             robot.joint_var_cls(jnp.arange(1, timesteps)),
             robot.joint_var_cls(jnp.arange(0, timesteps - 1)),
@@ -73,7 +71,14 @@ def solve_trajopt(
             robot.joint_var_cls(jnp.arange(0, timesteps - 4)),
             dt,
             jnp.array([0.1])[None],
-        )
+        ),
+        pk.costs.self_collision_cost(
+            robot,
+            robot_coll,
+            traj_vars,
+            0.02,
+            5.0,
+        ),
     ]
 
     # --- Hard constraints ---
@@ -100,44 +105,14 @@ def solve_trajopt(
         ),
     ]
 
-    # Swept world collision constraints (continuous collision detection)
-    @jaxls.Constraint.create_factory(constraint_type="leq_zero")
-    def swept_world_collision_constraint(
-        vals: jaxls.VarValues,
-        robot: pk.Robot,
-        robot_coll: pk.collision.RobotCollision,
-        world_coll_obj: pk.collision.CollGeom,
-        prev_traj_vars: jaxls.Var[jax.Array],
-        curr_traj_vars: jaxls.Var[jax.Array],
-        margin: float,
-    ):
-        """Constraint for swept capsule collision. Returns positive when violated."""
-        coll = robot_coll.get_swept_capsules(
-            robot, vals[prev_traj_vars], vals[curr_traj_vars]
-        )
-        dist = pk.collision.collide(
-            coll.reshape((-1, 1)), world_coll_obj.reshape((1, -1))
-        )
-        colldist = pk.collision.colldist_from_sdf(dist, margin)
-        return -colldist.flatten()  # Negative = satisfied, positive = violated
-
     for world_coll_obj in world_coll:
         constraints.append(
-            # TODO removed this for now; the violation is way bigger than I would expect. Need to debug.
-            # swept_world_collision_constraint(
-            #     robot,
-            #     robot_coll,
-            #     jax.tree.map(lambda x: x[None], world_coll_obj),
-            #     robot.joint_var_cls(jnp.arange(0, timesteps - 1)),
-            #     robot.joint_var_cls(jnp.arange(1, timesteps)),
-            #     0.00,  # collision margin
-            # )
             pk.constraints.world_collision_constraint(
                 robot,
                 robot_coll,
                 traj_vars,
                 jax.tree.map(lambda x: x[None], world_coll_obj),
-                0.01,  # collision margin
+                0.01,
             )
         )
 
@@ -151,7 +126,6 @@ def solve_trajopt(
         .analyze()
         .solve(
             initial_vals=jaxls.VarValues.make((traj_vars.with_value(init_traj),)),
-            # augmented_lagrangian=jaxls.AugmentedLagrangianConfig(max_iterations=5),
         )
     )
     return np.array(solution[traj_vars])
