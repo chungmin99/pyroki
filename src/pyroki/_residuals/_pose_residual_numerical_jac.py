@@ -50,7 +50,7 @@ def _pose_cost_jac(
     return jac * jnp.array([pos_weight] * 3 + [ori_weight] * 3)[:, None]
 
 
-@jaxls.Cost.create_factory(jac_custom_with_cache_fn=_pose_cost_jac)
+@jaxls.Cost.factory(jac_custom_with_cache_fn=_pose_cost_jac)
 def pose_cost_numerical_jac(
     vals: jaxls.VarValues,
     robot: Robot,

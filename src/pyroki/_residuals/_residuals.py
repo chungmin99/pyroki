@@ -287,7 +287,7 @@ def limit_acceleration_residual(
     q_tp2 = vals[var_t_plus_2]
 
     acceleration = (-q_tp2 + 16 * q_tp1 - 30 * q_t + 16 * q_tm1 - q_tm2) / (12 * dt**2)
-    residual= jnp.maximum(0.0, jnp.abs(acceleration) - acceleration_limit)
+    residual = jnp.maximum(0.0, jnp.abs(acceleration) - acceleration_limit)
     return (residual * weight).flatten()
 
 
@@ -344,5 +344,5 @@ def limit_jerk_residual(
     jerk = (-q_tp3 + 8 * q_tp2 - 13 * q_tp1 + 13 * q_tm1 - 8 * q_tm2 + q_tm3) / (
         8 * dt**3
     )
-    residual= jnp.maximum(0.0, jnp.abs(jerk) - jerk_limit)
+    residual = jnp.maximum(0.0, jnp.abs(jerk) - jerk_limit)
     return (residual * weight).flatten()
