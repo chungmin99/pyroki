@@ -78,16 +78,14 @@ def _solve_ik_jax(
             weight=1.0,
         ),
     ]
-    constraints = [
-        pk.constraints.limit_constraint(
+    costs.append(
+        pk.costs.limit_constraint(
             robot,
             JointVar(0),
         ),
-    ]
+    )
     sol = (
-        jaxls.LeastSquaresProblem(
-            costs=costs, variables=[JointVar(0)], constraints=constraints
-        )
+        jaxls.LeastSquaresProblem(costs=costs, variables=[JointVar(0)])
         .analyze()
         .solve(
             verbose=False,

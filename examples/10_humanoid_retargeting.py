@@ -165,9 +165,8 @@ def solve_retargeting(
 
     # Costs and constraints.
     costs: list[jaxls.Cost] = []
-    constraints: list[jaxls.Constraint] = []
 
-    @jaxls.Cost.create_factory
+    @jaxls.Cost.factory
     def retargeting_cost(
         var_values: jaxls.VarValues,
         var_Ts_world_root: jaxls.SE3Var,
@@ -223,7 +222,7 @@ def solve_retargeting(
         )
         return residual
 
-    @jaxls.Cost.create_factory
+    @jaxls.Cost.factory
     def pc_alignment_cost(
         var_values: jaxls.VarValues,
         var_Ts_world_root: jaxls.SE3Var,
@@ -267,12 +266,12 @@ def solve_retargeting(
         ),
     ]
 
-    constraints = [
-        pk.constraints.limit_constraint(
+    costs.append(
+        pk.costs.limit_constraint(
             jax.tree.map(lambda x: x[None], robot),
             var_joints,
         ),
-    ]
+    )
 
     solution = (
         jaxls.LeastSquaresProblem(
@@ -283,7 +282,6 @@ def solve_retargeting(
                 var_smpl_joints_scale,
                 var_offset,
             ],
-            constraints=constraints,
         )
         .analyze()
         .solve(

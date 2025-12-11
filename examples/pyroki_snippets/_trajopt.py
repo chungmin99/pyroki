@@ -81,33 +81,35 @@ def solve_trajopt(
         ),
     ]
 
-    # --- Hard constraints ---
-    constraints: list[jaxls.Constraint] = [
-        # Joint limits.
-        pk.constraints.limit_constraint(robot, traj_vars),
-        # Start / end pose constraints.
-        jaxls.Constraint(
-            lambda vals, var: (vals[var] - start_cfg).flatten(),
-            (robot.joint_var_cls(jnp.arange(0, 2)),),
-            name="start_pose_constraint",
-        ),
-        jaxls.Constraint(
-            lambda vals, var: (vals[var] - end_cfg).flatten(),
-            (robot.joint_var_cls(jnp.arange(timesteps - 2, timesteps)),),
-            name="end_pose_constraint",
-        ),
-        # Velocity limits.
-        pk.constraints.limit_velocity_constraint(
+    # --- Constraints (augmented Lagrangian penalties) ---
+    # Joint limits.
+    costs.append(pk.costs.limit_constraint(robot, traj_vars))
+
+    # Start / end pose constraints.
+    @jaxls.Cost.factory(kind="constraint_eq_zero", name="start_pose_constraint")
+    def start_pose_constraint(vals: jaxls.VarValues, var) -> jax.Array:
+        return (vals[var] - start_cfg).flatten()
+
+    @jaxls.Cost.factory(kind="constraint_eq_zero", name="end_pose_constraint")
+    def end_pose_constraint(vals: jaxls.VarValues, var) -> jax.Array:
+        return (vals[var] - end_cfg).flatten()
+
+    costs.append(start_pose_constraint(robot.joint_var_cls(jnp.arange(0, 2))))
+    costs.append(end_pose_constraint(robot.joint_var_cls(jnp.arange(timesteps - 2, timesteps))))
+
+    # Velocity limits.
+    costs.append(
+        pk.costs.limit_velocity_constraint(
             robot,
             robot.joint_var_cls(jnp.arange(1, timesteps)),
             robot.joint_var_cls(jnp.arange(0, timesteps - 1)),
             dt,
-        ),
-    ]
+        )
+    )
 
     for world_coll_obj in world_coll:
-        constraints.append(
-            pk.constraints.world_collision_constraint(
+        costs.append(
+            pk.costs.world_collision_constraint(
                 robot,
                 robot_coll,
                 traj_vars,
@@ -121,7 +123,6 @@ def solve_trajopt(
         jaxls.LeastSquaresProblem(
             costs=costs,
             variables=[traj_vars],
-            constraints=constraints,
         )
         .analyze()
         .solve(
@@ -185,7 +186,7 @@ def solve_iks_with_collision(
     ]
 
     # Small cost to encourage the start + end configs to be close to each other.
-    @jaxls.Cost.create_factory(name="JointSimilarityCost")
+    @jaxls.Cost.factory(name="JointSimilarityCost")
     def joint_similarity_cost(vals, var_0, var_1):
         return (vals[var_0] - vals[var_1]).flatten()
 
@@ -206,18 +207,16 @@ def solve_iks_with_collision(
         ]
     )
 
-    # Hard constraints: joint limits only
-    constraints = [
-        pk.constraints.limit_constraint(
+    # Constraint: joint limits
+    costs.append(
+        pk.costs.limit_constraint(
             jax.tree.map(lambda x: x[None], robot),
             joint_vars,
         ),
-    ]
+    )
 
     sol = (
-        jaxls.LeastSquaresProblem(
-            costs=costs, variables=variables, constraints=constraints
-        )
+        jaxls.LeastSquaresProblem(costs=costs, variables=variables)
         .analyze()
         .solve(
             verbose=False,

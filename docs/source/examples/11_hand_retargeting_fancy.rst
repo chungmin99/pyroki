@@ -244,10 +244,10 @@ All examples can be run by first cloning the PyRoki repository, which includes t
             var_smpl_joints_scale = ManoJointsScaleVar(jnp.zeros(timesteps))
             var_offset = OffsetVar(jnp.zeros(timesteps))
 
-            # Costs.
+            # Costs and constraints.
             costs: list[jaxls.Cost] = []
 
-            @jaxls.Cost.create_factory
+            @jaxls.Cost.factory
             def retargeting_cost(
                 var_values: jaxls.VarValues,
                 var_Ts_world_root: jaxls.SE3Var,
@@ -309,7 +309,7 @@ All examples can be run by first cloning the PyRoki repository, which includes t
                 )
                 return residual
 
-            @jaxls.Cost.create_factory
+            @jaxls.Cost.factory
             def scale_regularization(
                 var_values: jaxls.VarValues,
                 var_smpl_joints_scale: ManoJointsScaleVar,
@@ -325,7 +325,7 @@ All examples can be run by first cloning the PyRoki repository, which includes t
                 res_2 = jnp.clip(-var_values[var_smpl_joints_scale], min=0).flatten() * 100.0
                 return jnp.concatenate([res_0, res_1, res_2])
 
-            @jaxls.Cost.create_factory
+            @jaxls.Cost.factory
             def pc_alignment_cost(
                 var_values: jaxls.VarValues,
                 var_Ts_world_root: jaxls.SE3Var,
@@ -341,7 +341,7 @@ All examples can be run by first cloning the PyRoki repository, which includes t
                 keypoint_pos = keypoints[mano_joint_retarget_indices]
                 return (link_pos - keypoint_pos).flatten() * weights["global_alignment"]
 
-            @jaxls.Cost.create_factory
+            @jaxls.Cost.factory
             def root_smoothness(
                 var_values: jaxls.VarValues,
                 var_Ts_world_root: jaxls.SE3Var,
@@ -353,7 +353,7 @@ All examples can be run by first cloning the PyRoki repository, which includes t
                     - var_values[var_Ts_world_root_prev].translation()
                 ).flatten() * weights["root_smoothness"]
 
-            @jaxls.Cost.create_factory
+            @jaxls.Cost.factory
             def contact_cost(
                 var_values: jaxls.VarValues,
                 var_T_world_root: jaxls.SE3Var,
@@ -399,11 +399,6 @@ All examples can be run by first cloning the PyRoki repository, which includes t
                     target_keypoints,
                 ),
                 scale_regularization(var_smpl_joints_scale),
-                pk.costs.limit_cost(
-                    jax.tree.map(lambda x: x[None], robot),
-                    var_joints,
-                    100.0,
-                ),
                 pk.costs.smoothness_cost(
                     robot.joint_var_cls(jnp.arange(1, timesteps)),
                     robot.joint_var_cls(jnp.arange(0, timesteps - 1)),
@@ -433,12 +428,27 @@ All examples can be run by first cloning the PyRoki repository, which includes t
                 ),
             ]
 
+            costs.append(
+                pk.costs.limit_constraint(
+                    jax.tree.map(lambda x: x[None], robot),
+                    var_joints,
+                ),
+            )
+
             solution = (
                 jaxls.LeastSquaresProblem(
-                    costs, [var_joints, var_Ts_world_root, var_smpl_joints_scale, var_offset]
+                    costs=costs,
+                    variables=[
+                        var_joints,
+                        var_Ts_world_root,
+                        var_smpl_joints_scale,
+                        var_offset,
+                    ],
                 )
                 .analyze()
-                .solve()
+                .solve(
+                    augmented_lagrangian=jaxls.AugmentedLagrangianConfig(max_iterations=5),
+                )
             )
             transform = solution[var_Ts_world_root]
             offset = solution[var_offset]
