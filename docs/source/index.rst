@@ -20,7 +20,7 @@ Features include:
 - Differentiable collision bodies with numpy broadcasting logic. 
 - Common cost factors (e.g., end effector pose, self/world-collision, manipulability).
 - Arbitrary costs, getting Jacobians either calculated :doc:`through autodiff or defined manually<misc/writing_manual_jac>`.
-- Integration with a `Levenberg-Marquardt Solver <https://github.com/brentyi/jaxls>`_ that supports optimization on manifolds (e.g., `lie groups <https://github.com/brentyi/jaxlie>`_) and hard constraints via augmented Lagrangian.
+- Integration with a `Levenberg-Marquardt Solver <https://github.com/brentyi/jaxls>`_ that supports optimization on manifolds (e.g., `lie groups <https://github.com/brentyi/jaxlie>`_) and hard constraints via an Augmented Lagrangian solver.
 - Cross-platform support (CPU, GPU, TPU) via JAX.
 
 
