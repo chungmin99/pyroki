@@ -86,15 +86,15 @@ def _solve_ik_with_collision_jax(
             weight=5.0,
         ),
     ]
-    constraints = [
-        pk.constraints.limit_constraint(
+    costs.append(
+        pk.costs.limit_constraint(
             robot,
             joint_var,
         )
-    ]
-    constraints.extend(
+    )
+    costs.extend(
         [
-            pk.constraints.world_collision_constraint(
+            pk.costs.world_collision_constraint(
                 robot, coll, joint_var, world_coll, 0.05
             )
             for world_coll in world_coll_list
@@ -102,9 +102,7 @@ def _solve_ik_with_collision_jax(
     )
 
     sol = (
-        jaxls.LeastSquaresProblem(
-            costs=costs, variables=variables, constraints=constraints
-        )
+        jaxls.LeastSquaresProblem(costs=costs, variables=variables)
         .analyze()
         .solve(
             verbose=False,

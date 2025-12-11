@@ -1,4 +1,3 @@
-from . import constraints as constraints
 from . import costs as costs
 from . import collision as collision
 from . import viewer as viewer

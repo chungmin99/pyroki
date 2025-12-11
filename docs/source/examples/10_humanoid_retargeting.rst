@@ -27,7 +27,6 @@ All examples can be run by first cloning the PyRoki repository, which includes t
         import numpy as onp
         import pyroki as pk
         import viser
-        from pyroki.collision import colldist_from_sdf, collide
         from robot_descriptions.loaders.yourdfpy import load_robot_description
         from viser.extras import ViserUrdf
 
@@ -50,7 +49,6 @@ All examples can be run by first cloning the PyRoki repository, which includes t
 
             urdf = load_robot_description("g1_description")
             robot = pk.Robot.from_urdf(urdf)
-            robot_coll = pk.collision.RobotCollision.from_urdf(urdf)
 
             # Load source motion data:
             # - keypoints [N, 45, 3],
@@ -161,7 +159,7 @@ All examples can be run by first cloning the PyRoki repository, which includes t
             joints_to_move_less = jnp.array(
                 [
                     robot.joints.actuated_names.index(name)
-                    for name in ["left_hip_yaw_joint", "right_hip_yaw_joint", "torso_joint"]
+                    for name in ["left_hip_yaw_joint", "right_hip_yaw_joint"]
                 ]
             )
 
@@ -177,10 +175,10 @@ All examples can be run by first cloning the PyRoki repository, which includes t
             var_smpl_joints_scale = SmplJointsScaleVarG1(jnp.zeros(timesteps))
             var_offset = OffsetVar(jnp.zeros(timesteps))
 
-            # Costs.
+            # Costs and constraints.
             costs: list[jaxls.Cost] = []
 
-            @jaxls.Cost.create_factory
+            @jaxls.Cost.factory
             def retargeting_cost(
                 var_values: jaxls.VarValues,
                 var_Ts_world_root: jaxls.SE3Var,
@@ -236,7 +234,7 @@ All examples can be run by first cloning the PyRoki repository, which includes t
                 )
                 return residual
 
-            @jaxls.Cost.create_factory
+            @jaxls.Cost.factory
             def pc_alignment_cost(
                 var_values: jaxls.VarValues,
                 var_Ts_world_root: jaxls.SE3Var,
@@ -260,11 +258,6 @@ All examples can be run by first cloning the PyRoki repository, which includes t
                     var_smpl_joints_scale,
                     target_keypoints,
                 ),
-                pk.costs.limit_cost(
-                    jax.tree.map(lambda x: x[None], robot),
-                    var_joints,
-                    100.0,
-                ),
                 pk.costs.smoothness_cost(
                     robot.joint_var_cls(jnp.arange(1, timesteps)),
                     robot.joint_var_cls(jnp.arange(0, timesteps - 1)),
@@ -285,12 +278,27 @@ All examples can be run by first cloning the PyRoki repository, which includes t
                 ),
             ]
 
+            costs.append(
+                pk.costs.limit_constraint(
+                    jax.tree.map(lambda x: x[None], robot),
+                    var_joints,
+                ),
+            )
+
             solution = (
                 jaxls.LeastSquaresProblem(
-                    costs, [var_joints, var_Ts_world_root, var_smpl_joints_scale, var_offset]
+                    costs=costs,
+                    variables=[
+                        var_joints,
+                        var_Ts_world_root,
+                        var_smpl_joints_scale,
+                        var_offset,
+                    ],
                 )
                 .analyze()
-                .solve()
+                .solve(
+                    augmented_lagrangian=jaxls.AugmentedLagrangianConfig(max_iterations=5),
+                )
             )
             transform = solution[var_Ts_world_root]
             offset = solution[var_offset]

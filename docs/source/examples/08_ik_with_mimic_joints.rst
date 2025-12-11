@@ -22,11 +22,13 @@ All examples can be run by first cloning the PyRoki repository, which includes t
         :linenos:
 
 
+        import tempfile
         import time
 
         import numpy as np
         import pyroki as pk
         import viser
+        import yourdfpy
         from viser.extras import ViserUrdf
 
         import pyroki_snippets as pks
@@ -95,9 +97,6 @@ All examples can be run by first cloning the PyRoki repository, which includes t
 
         def main():
             """Main function for basic IK."""
-
-            import yourdfpy
-            import tempfile
 
             xml = create_chain_xml(num_chains=10, length=0.1)
             with tempfile.NamedTemporaryFile(mode="w", suffix=".urdf") as f:

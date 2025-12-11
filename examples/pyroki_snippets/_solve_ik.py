@@ -61,17 +61,13 @@ def _solve_ik_jax(
             pos_weight=50.0,
             ori_weight=10.0,
         ),
-    ]
-    constraints = [
-        pk.constraints.limit_constraint(
+        pk.costs.limit_constraint(
             robot,
             joint_var,
         ),
     ]
     sol = (
-        jaxls.LeastSquaresProblem(
-            costs=costs, variables=variables, constraints=constraints
-        )
+        jaxls.LeastSquaresProblem(costs=costs, variables=variables)
         .analyze()
         .solve(
             verbose=False,
