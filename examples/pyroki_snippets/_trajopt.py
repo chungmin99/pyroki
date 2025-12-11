@@ -95,7 +95,9 @@ def solve_trajopt(
         return (vals[var] - end_cfg).flatten()
 
     costs.append(start_pose_constraint(robot.joint_var_cls(jnp.arange(0, 2))))
-    costs.append(end_pose_constraint(robot.joint_var_cls(jnp.arange(timesteps - 2, timesteps))))
+    costs.append(
+        end_pose_constraint(robot.joint_var_cls(jnp.arange(timesteps - 2, timesteps)))
+    )
 
     # Velocity limits.
     costs.append(
