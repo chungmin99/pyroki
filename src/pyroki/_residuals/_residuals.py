@@ -237,7 +237,8 @@ def five_point_velocity_residual(
 
     velocity = (-q_tp2 + 8 * q_tp1 - 8 * q_tm1 + q_tm2) / (12 * dt)
     vel_limits = robot.joints.velocity_limits
-    return ((jnp.abs(velocity) - vel_limits) * weight).flatten()
+    residual = jnp.maximum(0.0, jnp.abs(velocity) - vel_limits)
+    return (residual * weight).flatten()
 
 
 def five_point_acceleration_residual(
@@ -258,7 +259,8 @@ def five_point_acceleration_residual(
     q_tp2 = vals[var_t_plus_2]
 
     acceleration = (-q_tp2 + 16 * q_tp1 - 30 * q_t + 16 * q_tm1 - q_tm2) / (12 * dt**2)
-    return (acceleration * weight).flatten()
+    residual = jnp.abs(acceleration)
+    return (residual * weight).flatten()
 
 
 def limit_acceleration_residual(
@@ -285,7 +287,8 @@ def limit_acceleration_residual(
     q_tp2 = vals[var_t_plus_2]
 
     acceleration = (-q_tp2 + 16 * q_tp1 - 30 * q_t + 16 * q_tm1 - q_tm2) / (12 * dt**2)
-    return ((jnp.abs(acceleration) - acceleration_limit) * weight).flatten()
+    residual= jnp.maximum(0.0, jnp.abs(acceleration) - acceleration_limit)
+    return (residual * weight).flatten()
 
 
 def five_point_jerk_residual(
@@ -310,7 +313,7 @@ def five_point_jerk_residual(
     jerk = (-q_tp3 + 8 * q_tp2 - 13 * q_tp1 + 13 * q_tm1 - 8 * q_tm2 + q_tm3) / (
         8 * dt**3
     )
-    return (jerk * weight).flatten()
+    return (jnp.abs(jerk) * weight).flatten()
 
 
 def limit_jerk_residual(
@@ -341,4 +344,5 @@ def limit_jerk_residual(
     jerk = (-q_tp3 + 8 * q_tp2 - 13 * q_tp1 + 13 * q_tm1 - 8 * q_tm2 + q_tm3) / (
         8 * dt**3
     )
-    return ((jnp.abs(jerk) - jerk_limit) * weight).flatten()
+    residual= jnp.maximum(0.0, jnp.abs(jerk) - jerk_limit)
+    return (residual * weight).flatten()
