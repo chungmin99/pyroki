@@ -126,7 +126,9 @@ class LinkInfo:
     num_links: jdc.Static[int]
     names: jdc.Static[tuple[str, ...]]
     parent_joint_indices: Int[Array, "n_links"]
-
+    
+    # Transform from parent joint to link
+    T_parent_joint_link: Float[Array, "n_links 7"]
 
 class RobotURDFParser:
     """Parser for creating Robot instances from URDF files."""
@@ -328,10 +330,17 @@ class RobotURDFParser:
         assert joint_info.mimic_offset.shape == (joint_info.num_joints,)
         assert joint_info.mimic_act_indices.shape == (joint_info.num_joints,)
 
+        identity_pose = jaxlie.SE3.identity().wxyz_xyz
+        T_parent_joint_link = jnp.broadcast_to(
+            identity_pose,
+            (len(link_name_list), identity_pose.shape[-1]),
+        )
+
         link_info = LinkInfo(
             num_links=len(link_name_list),
             names=tuple(link_name_list),
             parent_joint_indices=jnp.array(parent_joint_idx_list, dtype=jnp.int32),
+            T_parent_joint_link=T_parent_joint_link,
         )
         assert link_info.parent_joint_indices.shape == (link_info.num_links,)
         return joint_info, link_info
