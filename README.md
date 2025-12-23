@@ -12,7 +12,7 @@ Core features include:
 - Differentiable collision bodies with numpy broadcasting logic.
 - Common cost implementations (e.g., end effector pose, self/world-collision, manipulability).
 - Arbitrary costs, autodiff or analytical Jacobians.
-- Integration with a [Levenberg-Marquardt Solver](https://github.com/brentyi/jaxls) that supports optimization on manifolds (e.g., [lie groups](https://github.com/brentyi/jaxlie))
+- Integration with a [Levenberg-Marquardt Solver](https://github.com/brentyi/jaxls) that supports optimization on manifolds (e.g., [lie groups](https://github.com/brentyi/jaxlie)) and hard constraints via an Augmented Lagrangian solver.
 - Cross-platform support (CPU, GPU, TPU) via JAX.
 
 Please refer to the [documentation](https://chungmin99.github.io/pyroki/) for more details, features, and usage examples.
@@ -41,7 +41,6 @@ We are preparing and will release by _May 16, 2025_:
 
 ## Limitations
 
-- **Soft constraints only**: We use a nonlinear least-squares formulation and model joint limits, collision avoidance, etc. as soft penalties with high weights rather than hard constraints.
 - **Static shapes & JIT overhead**: JAX JIT compilation is triggered on first run and when input shapes change (e.g., number of targets, obstacles). Arrays can be pre-padded to vectorize over inputs with different shapes.
 - **No sampling-based planners**: We don't include sampling-based planners (e.g., graphs, trees).
 - **Collision performance**: Speed and accuracy comparisons against other robot toolkits such as CuRobo have not been extensively performed, and is likely slower than other toolkits for collision-heavy scenarios.

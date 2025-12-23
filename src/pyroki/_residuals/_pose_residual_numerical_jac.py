@@ -1,9 +1,21 @@
+"""Pose residual with numerical (finite difference) Jacobian computation.
+
+This module provides pose cost with numerical Jacobian computation
+using finite differences. This is simpler but less accurate than the analytic
+Jacobian version.
+
+Note: This uses a custom Jacobian pattern that doesn't fit the simple
+Cost.create_factory(residual_fn) pattern, so it's kept as a specialized
+cost factory rather than a pure residual function.
+"""
+
 import jax
 import jax.numpy as jnp
 import jaxlie
 import jaxls
 
 from .._robot import Robot
+
 
 _PoseCostJacCache = tuple[jax.Array, jax.Array, jaxlie.SE3]
 
@@ -38,7 +50,7 @@ def _pose_cost_jac(
     return jac * jnp.array([pos_weight] * 3 + [ori_weight] * 3)[:, None]
 
 
-@jaxls.Cost.create_factory(jac_custom_with_cache_fn=_pose_cost_jac)
+@jaxls.Cost.factory(jac_custom_with_cache_fn=_pose_cost_jac)
 def pose_cost_numerical_jac(
     vals: jaxls.VarValues,
     robot: Robot,
@@ -49,8 +61,24 @@ def pose_cost_numerical_jac(
     ori_weight: jax.Array | float,
     eps: float = 1e-4,
 ) -> tuple[jax.Array, _PoseCostJacCache]:
-    """Computes the residual for matching link poses to target poses."""
-    del eps  # Unused!
+    """Create a pose cost with numerical (finite difference) Jacobian.
+
+    This is simpler but less accurate than the analytic Jacobian version.
+
+    Args:
+        vals: Variable values.
+        robot: Robot model.
+        joint_var: Joint configuration variable.
+        target_pose: Target SE3 pose.
+        target_link_index: Index of target link (int32).
+        pos_weight: Weight for position error.
+        ori_weight: Weight for orientation error.
+        eps: Finite difference step size.
+
+    Returns:
+        Tuple of (residual, jacobian_cache).
+    """
+    del eps  # Unused in residual computation, only in Jacobian!
     assert target_link_index.dtype == jnp.int32
     joint_cfg = vals[joint_var]
 

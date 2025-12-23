@@ -61,7 +61,7 @@ def _solve_ik_with_collision_jax(
 ) -> jax.Array:
     """Solves the basic IK problem with collision avoidance. Returns joint configuration."""
     joint_var = robot.joint_var_cls(0)
-    vars = [joint_var]
+    variables = [joint_var]
 
     # Weights and margins defined directly in factors
     costs = [
@@ -72,11 +72,6 @@ def _solve_ik_with_collision_jax(
             target_link_index=target_link_index,
             pos_weight=5.0,
             ori_weight=1.0,
-        ),
-        pk.costs.limit_cost(
-            robot,
-            joint_var=joint_var,
-            weight=100.0,
         ),
         pk.costs.rest_cost(
             joint_var,
@@ -91,18 +86,28 @@ def _solve_ik_with_collision_jax(
             weight=5.0,
         ),
     ]
+    costs.append(
+        pk.costs.limit_constraint(
+            robot,
+            joint_var,
+        )
+    )
     costs.extend(
         [
-            pk.costs.world_collision_cost(
-                robot, coll, joint_var, world_coll, 0.05, 10.0
+            pk.costs.world_collision_constraint(
+                robot, coll, joint_var, world_coll, 0.05
             )
             for world_coll in world_coll_list
         ]
     )
 
     sol = (
-        jaxls.LeastSquaresProblem(costs, vars)
+        jaxls.LeastSquaresProblem(costs=costs, variables=variables)
         .analyze()
-        .solve(verbose=False, linear_solver="dense_cholesky")
+        .solve(
+            verbose=False,
+            linear_solver="dense_cholesky",
+            augmented_lagrangian=jaxls.AugmentedLagrangianConfig(max_iterations=5),
+        )
     )
     return sol[joint_var]

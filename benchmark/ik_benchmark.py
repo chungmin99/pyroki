@@ -1,3 +1,4 @@
+# ruff: noqa: E402
 """Modified version of cuRobo's IK benchmark script:
 
     https://github.com/NVlabs/curobo/blob/0a50de1ba72db304195d59d9d0b1ed269696047f/benchmark/ik_benchmark.py

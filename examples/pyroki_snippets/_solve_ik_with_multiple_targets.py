@@ -63,7 +63,7 @@ def _solve_ik_jax(
     )
     batch_axes = target_pose.get_batch_axes()
 
-    factors = [
+    costs = [
         pk.costs.pose_cost_analytic_jac(
             jax.tree.map(lambda x: x[None], robot),
             JointVar(jnp.full(batch_axes, 0)),
@@ -77,14 +77,15 @@ def _solve_ik_jax(
             rest_pose=JointVar.default_factory(),
             weight=1.0,
         ),
-        pk.costs.limit_cost(
+    ]
+    costs.append(
+        pk.costs.limit_constraint(
             robot,
             JointVar(0),
-            jnp.array([100.0] * robot.joints.num_joints),
         ),
-    ]
+    )
     sol = (
-        jaxls.LeastSquaresProblem(factors, [JointVar(0)])
+        jaxls.LeastSquaresProblem(costs=costs, variables=[JointVar(0)])
         .analyze()
         .solve(
             verbose=False,

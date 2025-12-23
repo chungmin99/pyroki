@@ -60,8 +60,8 @@ def _solve_ik_jax(
     manipulability_weight: jnp.ndarray,
 ) -> jax.Array:
     joint_var = robot.joint_var_cls(0)
-    vars = [joint_var]
-    factors = [
+    variables = [joint_var]
+    costs = [
         pk.costs.pose_cost_analytic_jac(
             robot,
             joint_var,
@@ -69,11 +69,6 @@ def _solve_ik_jax(
             target_joint_idx,
             pos_weight=50.0,
             ori_weight=10.0,
-        ),
-        pk.costs.limit_cost(
-            robot,
-            joint_var,
-            jnp.array([100.0] * robot.joints.num_joints),
         ),
         pk.costs.rest_cost(
             joint_var,
@@ -87,8 +82,14 @@ def _solve_ik_jax(
             manipulability_weight,
         ),
     ]
+    costs.append(
+        pk.costs.limit_constraint(
+            robot,
+            joint_var,
+        ),
+    )
     sol = (
-        jaxls.LeastSquaresProblem(factors, vars)
+        jaxls.LeastSquaresProblem(costs=costs, variables=variables)
         .analyze()
         .solve(verbose=False, linear_solver="dense_cholesky")
     )

@@ -92,7 +92,8 @@ def _solve_ik_jax(
 
     base_var = ConstrainedSE3Var(0)
 
-    factors = [
+    variables = [joint_var, base_var]
+    costs = [
         pk.costs.pose_cost_with_base(
             robot,
             joint_var,
@@ -101,11 +102,6 @@ def _solve_ik_jax(
             target_joint_indices,
             pos_weight=jnp.array(5.0),
             ori_weight=jnp.array(1.0),
-        ),
-        pk.costs.limit_cost(
-            robot,
-            joint_var,
-            jnp.array(100.0),
         ),
         pk.costs.rest_with_base_cost(
             joint_var,
@@ -118,14 +114,21 @@ def _solve_ik_jax(
             ),
         ),
     ]
+    costs.append(
+        pk.costs.limit_constraint(
+            robot,
+            joint_var,
+        ),
+    )
     sol = (
-        jaxls.LeastSquaresProblem(factors, [joint_var, base_var])
+        jaxls.LeastSquaresProblem(costs=costs, variables=variables)
         .analyze()
         .solve(
             initial_vals=jaxls.VarValues.make(
                 [joint_var.with_value(prev_cfg), base_var]
             ),
             verbose=False,
+            augmented_lagrangian=jaxls.AugmentedLagrangianConfig(max_iterations=2),
         )
     )
     return sol[base_var], sol[joint_var]

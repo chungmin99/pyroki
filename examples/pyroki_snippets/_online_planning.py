@@ -96,7 +96,7 @@ def _solve_online_planning_jax(
     # --- Define Costs ---
     factors: list[jaxls.Cost] = []  # Changed type hint to jaxls.Cost
 
-    @jaxls.Cost.create_factory(name="SE3PoseMatchJointCost")
+    @jaxls.Cost.factory(name="SE3PoseMatchJointCost")
     def match_joint_to_pose_cost(
         vals: jaxls.VarValues,
         joint_var: jaxls.Var[jnp.ndarray],
@@ -110,7 +110,7 @@ def _solve_online_planning_jax(
         ).log()
         return residual.flatten() * 100.0
 
-    @jaxls.Cost.create_factory(name="SE3SmoothnessCost")
+    @jaxls.Cost.factory(name="SE3SmoothnessCost")
     def pose_smoothness_cost(
         vals: jaxls.VarValues,
         pose_var: BatchedSE3Var,
@@ -118,7 +118,7 @@ def _solve_online_planning_jax(
     ):
         return (vals[pose_var].inverse() @ vals[pose_var_prev]).log().flatten() * 1.0
 
-    @jaxls.Cost.create_factory(name="SE3PoseMatchCost")
+    @jaxls.Cost.factory(name="SE3PoseMatchCost")
     def pose_match_cost(
         vals: jaxls.VarValues,
         pose_var: BatchedSE3Var,
@@ -128,7 +128,7 @@ def _solve_online_planning_jax(
             * jnp.array([50.0] * 3 + [20.0] * 3)
         ).flatten()
 
-    @jaxls.Cost.create_factory(name="MatchStartPoseCost")
+    @jaxls.Cost.factory(name="MatchStartPoseCost")
     def match_start_pose_cost(
         vals: jaxls.VarValues,
         joint_var: jaxls.Var[jnp.ndarray],
@@ -152,6 +152,8 @@ def _solve_online_planning_jax(
     factors.append(match_start_pose_cost(robot.joint_var_cls(0)))
 
     # Add joint costs.
+    # Technically we should add this as a constraint, but the augmented lagrangian formulation
+    # requires us to perform multiple outer loop iterations to converge, which is slow. :(
     factors.extend(
         [
             match_joint_to_pose_cost(
@@ -167,7 +169,7 @@ def _solve_online_planning_jax(
                 jax.tree.map(lambda x: x[None], robot),
                 traj_var_prev,
                 traj_var_next,
-                weight=10.0,
+                weight=1.0,
                 dt=dt,
             ),
             pk.costs.limit_cost(

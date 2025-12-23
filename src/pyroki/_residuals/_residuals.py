@@ -1,15 +1,26 @@
+"""Core residual functions for pyroki costs and constraints.
+
+These functions have the same signature as cost/constraint functions
+(taking `vals: VarValues` as first arg), so they can be directly wrapped:
+
+    limit_cost = Cost.create_factory(limit_residual)
+    limit_constraint = Constraint.create_factory(limit_residual, constraint_type="leq_zero")
+"""
+
 import jax
 import jax.numpy as jnp
 import jaxlie
 from jax import Array
-from jaxls import Cost, Var, VarValues
+from jaxls import Var, VarValues
 
 from .._robot import Robot
 from ..collision import CollGeom, RobotCollision, colldist_from_sdf
 
 
-@Cost.create_factory
-def pose_cost(
+# --- Pose Residuals ---
+
+
+def pose_residual(
     vals: VarValues,
     robot: Robot,
     joint_var: Var[Array],
@@ -29,8 +40,7 @@ def pose_cost(
     return jnp.concatenate([pos_residual, ori_residual]).flatten()
 
 
-@Cost.create_factory
-def pose_cost_with_base(
+def pose_with_base_residual(
     vals: VarValues,
     robot: Robot,
     joint_var: Var[Array],
@@ -54,60 +64,68 @@ def pose_cost_with_base(
     return jnp.concatenate([pos_residual, ori_residual]).flatten()
 
 
-# --- Limit Costs ---
+# --- Limit Residuals ---
 
 
-@Cost.create_factory
-def limit_cost(
+def limit_residual(
     vals: VarValues,
     robot: Robot,
     joint_var: Var[Array],
-    weight: Array | float,
+    weight: Array | float = 1.0,
 ) -> Array:
-    """Computes the residual penalizing joint limit violations."""
+    """Computes joint limit violation residual.
+
+    Returns values that are:
+    - Positive when violated (joint outside limits)
+    - Negative when satisfied (joint within limits)
+
+    For inequality constraints: residual <= 0 means satisfied.
+    """
     joint_cfg = vals[joint_var]
     joint_cfg_eff = robot.joints.get_full_config(joint_cfg)
-    residual_upper = jnp.maximum(0.0, joint_cfg_eff - robot.joints.upper_limits_all)
-    residual_lower = jnp.maximum(0.0, robot.joints.lower_limits_all - joint_cfg_eff)
-    return ((residual_upper + residual_lower) * weight).flatten()
+    upper_violation = jnp.maximum(0.0, joint_cfg_eff - robot.joints.upper_limits_all)
+    lower_violation = jnp.maximum(0.0, robot.joints.lower_limits_all - joint_cfg_eff)
+    return (jnp.concatenate([upper_violation, lower_violation]) * weight).flatten()
 
 
-@Cost.create_factory
-def limit_velocity_cost(
+def limit_velocity_residual(
     vals: VarValues,
     robot: Robot,
     joint_var: Var[Array],
     prev_joint_var: Var[Array],
     dt: float,
-    weight: Array | float,
+    weight: Array | float = 1.0,
 ) -> Array:
-    """Computes the residual penalizing joint velocity limit violations."""
+    """Computes joint velocity limit violation residual.
+
+    Returns values that are:
+    - Positive when violated (|velocity| > limit)
+    - Zero when satisfied (|velocity| <= limit)
+    """
     joint_vel = (vals[joint_var] - vals[prev_joint_var]) / dt
     residual = jnp.maximum(0.0, jnp.abs(joint_vel) - robot.joints.velocity_limits)
     return (residual * weight).flatten()
 
 
-# --- Regularization Costs ---
+# --- Regularization Residuals ---
 
 
-@Cost.create_factory
-def rest_cost(
+def rest_residual(
     vals: VarValues,
     joint_var: Var[Array],
     rest_pose: Array,
-    weight: Array | float,
+    weight: Array | float = 1.0,
 ) -> Array:
     """Computes the residual biasing joints towards a rest pose."""
     return ((vals[joint_var] - rest_pose) * weight).flatten()
 
 
-@Cost.create_factory
-def rest_with_base_cost(
+def rest_with_base_residual(
     vals: VarValues,
     joint_var: Var[Array],
     T_world_base_var: Var[jaxlie.SE3],
     rest_pose: Array,
-    weight: Array | float,
+    weight: Array | float = 1.0,
 ) -> Array:
     """Computes the residual biasing joints and base towards rest/identity."""
     residual_joints = vals[joint_var] - rest_pose
@@ -115,18 +133,17 @@ def rest_with_base_cost(
     return (jnp.concatenate([residual_joints, residual_base]) * weight).flatten()
 
 
-@Cost.create_factory
-def smoothness_cost(
+def smoothness_residual(
     vals: VarValues,
     curr_joint_var: Var[Array],
     past_joint_var: Var[Array],
-    weight: Array | float,
+    weight: Array | float = 1.0,
 ) -> Array:
     """Computes the residual penalizing joint configuration differences (velocity)."""
     return ((vals[curr_joint_var] - vals[past_joint_var]) * weight).flatten()
 
 
-# --- Manipulability Cost ---
+# --- Manipulability Residual ---
 
 
 def _compute_manip_yoshikawa(
@@ -143,13 +160,12 @@ def _compute_manip_yoshikawa(
     return jnp.sqrt(jnp.maximum(0.0, jnp.linalg.det(JJT)))
 
 
-@Cost.create_factory
-def manipulability_cost(
+def manipulability_residual(
     vals: VarValues,
     robot: Robot,
     joint_var: Var[Array],
     target_link_indices: Array,
-    weight: Array | float,
+    weight: Array | float = 1.0,
 ) -> Array:
     """Computes the residual penalizing low manipulability (translation)."""
     cfg = vals[joint_var]
@@ -163,57 +179,57 @@ def manipulability_cost(
     return (residual * weight).flatten()
 
 
-# --- Collision Costs ---
+# --- Collision Residuals ---
 
 
-@Cost.create_factory
-def self_collision_cost(
+def self_collision_residual(
     vals: VarValues,
     robot: Robot,
     robot_coll: RobotCollision,
     joint_var: Var[Array],
     margin: float,
-    weight: Array | float,
+    weight: Array | float = 1.0,
 ) -> Array:
-    """Computes the residual penalizing self-collisions below a margin."""
+    """Computes self-collision violation residual. Residual is >0 if collision is detected."""
     cfg = vals[joint_var]
     active_distances = robot_coll.compute_self_collision_distance(robot, cfg)
-    residual = colldist_from_sdf(active_distances, margin)
-    return (residual * weight).flatten()
+    return -(colldist_from_sdf(active_distances, margin) * weight).flatten()
 
 
-@Cost.create_factory
-def world_collision_cost(
+def world_collision_residual(
     vals: VarValues,
     robot: Robot,
     robot_coll: RobotCollision,
     joint_var: Var[Array],
     world_geom: CollGeom,
     margin: float,
-    weight: Array | float,
+    weight: Array | float = 1.0,
 ) -> Array:
-    """Computes the residual penalizing world collisions below a margin."""
+    """Computes world collision violation residual. Residual is >0 if collision is detected."""
     cfg = vals[joint_var]
     dist_matrix = robot_coll.compute_world_collision_distance(robot, cfg, world_geom)
-    residual = colldist_from_sdf(dist_matrix, margin)
-    return (residual * weight).flatten()
+    return -(colldist_from_sdf(dist_matrix, margin) * weight).flatten()
 
 
-# --- Finite Difference Costs (Velocity, Acceleration, Jerk) ---
+# --- Finite Difference Residuals ---
 
 
-@Cost.create_factory
-def five_point_velocity_cost(
+def five_point_velocity_residual(
     vals: VarValues,
-    robot: Robot,  # Needed for limits
+    robot: Robot,
     var_t_plus_2: Var[Array],
     var_t_plus_1: Var[Array],
     var_t_minus_1: Var[Array],
     var_t_minus_2: Var[Array],
     dt: float,
-    weight: Array | float,
+    weight: Array | float = 1.0,
 ) -> Array:
-    """Computes the residual penalizing velocity limit violations (5-point stencil)."""
+    """Computes velocity limit violation using 5-point stencil.
+
+    Returns values that are:
+    - Positive when violated (|velocity| > limit)
+    - Negative when satisfied (|velocity| <= limit)
+    """
     q_tm2 = vals[var_t_minus_2]
     q_tm1 = vals[var_t_minus_1]
     q_tp1 = vals[var_t_plus_1]
@@ -221,12 +237,11 @@ def five_point_velocity_cost(
 
     velocity = (-q_tp2 + 8 * q_tp1 - 8 * q_tm1 + q_tm2) / (12 * dt)
     vel_limits = robot.joints.velocity_limits
-    limit_violation = jnp.maximum(0.0, jnp.abs(velocity) - vel_limits)
-    return (limit_violation * weight).flatten()
+    residual = jnp.maximum(0.0, jnp.abs(velocity) - vel_limits)
+    return (residual * weight).flatten()
 
 
-@Cost.create_factory
-def five_point_acceleration_cost(
+def five_point_acceleration_residual(
     vals: VarValues,
     var_t: Var[Array],
     var_t_plus_2: Var[Array],
@@ -234,9 +249,9 @@ def five_point_acceleration_cost(
     var_t_minus_1: Var[Array],
     var_t_minus_2: Var[Array],
     dt: float,
-    weight: Array | float,
+    weight: Array | float = 1.0,
 ) -> Array:
-    """Computes the residual minimizing joint acceleration (5-point stencil)."""
+    """Computes joint acceleration using 5-point stencil."""
     q_tm2 = vals[var_t_minus_2]
     q_tm1 = vals[var_t_minus_1]
     q_t = vals[var_t]
@@ -244,11 +259,39 @@ def five_point_acceleration_cost(
     q_tp2 = vals[var_t_plus_2]
 
     acceleration = (-q_tp2 + 16 * q_tp1 - 30 * q_t + 16 * q_tm1 - q_tm2) / (12 * dt**2)
-    return (acceleration * weight).flatten()
+    residual = jnp.abs(acceleration)
+    return (residual * weight).flatten()
 
 
-@Cost.create_factory
-def five_point_jerk_cost(
+def limit_acceleration_residual(
+    vals: VarValues,
+    var_t: Var[Array],
+    var_t_plus_2: Var[Array],
+    var_t_plus_1: Var[Array],
+    var_t_minus_1: Var[Array],
+    var_t_minus_2: Var[Array],
+    dt: float,
+    acceleration_limit: Array | float,
+    weight: Array | float = 1.0,
+) -> Array:
+    """Computes joint acceleration limit violation residual using 5-point stencil.
+
+    Returns values that are:
+    - Positive when violated (|acceleration| > limit)
+    - Negative when satisfied (|acceleration| <= limit)
+    """
+    q_tm2 = vals[var_t_minus_2]
+    q_tm1 = vals[var_t_minus_1]
+    q_t = vals[var_t]
+    q_tp1 = vals[var_t_plus_1]
+    q_tp2 = vals[var_t_plus_2]
+
+    acceleration = (-q_tp2 + 16 * q_tp1 - 30 * q_t + 16 * q_tm1 - q_tm2) / (12 * dt**2)
+    residual = jnp.maximum(0.0, jnp.abs(acceleration) - acceleration_limit)
+    return (residual * weight).flatten()
+
+
+def five_point_jerk_residual(
     vals: VarValues,
     var_t_plus_3: Var[Array],
     var_t_plus_2: Var[Array],
@@ -257,9 +300,9 @@ def five_point_jerk_cost(
     var_t_minus_2: Var[Array],
     var_t_minus_3: Var[Array],
     dt: float,
-    weight: Array | float,
+    weight: Array | float = 1.0,
 ) -> Array:
-    """Computes the residual minimizing joint jerk (7-point stencil)."""
+    """Computes joint jerk using 7-point stencil."""
     q_tm3 = vals[var_t_minus_3]
     q_tm2 = vals[var_t_minus_2]
     q_tm1 = vals[var_t_minus_1]
@@ -270,4 +313,36 @@ def five_point_jerk_cost(
     jerk = (-q_tp3 + 8 * q_tp2 - 13 * q_tp1 + 13 * q_tm1 - 8 * q_tm2 + q_tm3) / (
         8 * dt**3
     )
-    return (jerk * weight).flatten()
+    return (jnp.abs(jerk) * weight).flatten()
+
+
+def limit_jerk_residual(
+    vals: VarValues,
+    var_t_plus_3: Var[Array],
+    var_t_plus_2: Var[Array],
+    var_t_plus_1: Var[Array],
+    var_t_minus_1: Var[Array],
+    var_t_minus_2: Var[Array],
+    var_t_minus_3: Var[Array],
+    dt: float,
+    jerk_limit: Array | float,
+    weight: Array | float = 1.0,
+) -> Array:
+    """Computes joint jerk limit violation residual using 7-point stencil.
+
+    Returns values that are:
+    - Positive when violated (|jerk| > limit)
+    - Negative when satisfied (|jerk| <= limit)
+    """
+    q_tm3 = vals[var_t_minus_3]
+    q_tm2 = vals[var_t_minus_2]
+    q_tm1 = vals[var_t_minus_1]
+    q_tp1 = vals[var_t_plus_1]
+    q_tp2 = vals[var_t_plus_2]
+    q_tp3 = vals[var_t_plus_3]
+
+    jerk = (-q_tp3 + 8 * q_tp2 - 13 * q_tp1 + 13 * q_tm1 - 8 * q_tm2 + q_tm3) / (
+        8 * dt**3
+    )
+    residual = jnp.maximum(0.0, jnp.abs(jerk) - jerk_limit)
+    return (residual * weight).flatten()

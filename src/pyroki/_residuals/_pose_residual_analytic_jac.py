@@ -1,3 +1,13 @@
+"""Pose residual with analytic Jacobian computation.
+
+This module provides pose cost with efficient analytic Jacobian computation,
+avoiding automatic differentiation overhead.
+
+Note: This uses a custom Jacobian pattern that doesn't fit the simple
+Cost.create_factory(residual_fn) pattern, so it's kept as a specialized
+cost factory rather than a pure residual function.
+"""
+
 from functools import partial
 
 import jax
@@ -68,6 +78,21 @@ def pose_cost_analytic_jac(
     pos_weight: jax.Array | float,
     ori_weight: jax.Array | float,
 ) -> jaxls.Cost:
+    """Create a pose cost with analytic Jacobian computation.
+
+    This is more efficient than using automatic differentiation for the Jacobian.
+
+    Args:
+        robot: Robot model.
+        joint_var: Joint configuration variable.
+        target_pose: Target SE3 pose.
+        target_link_index: Index of target link (int32).
+        pos_weight: Weight for position error.
+        ori_weight: Weight for orientation error.
+
+    Returns:
+        Cost object for pose matching.
+    """
     # We only check shape lengths because there might be (1,) axes for
     # broadcasting reasons.
     assert (
@@ -190,7 +215,7 @@ def _pose_cost_jac(
     return jac * weights[:, None]
 
 
-@jaxls.Cost.create_factory(jac_custom_with_cache_fn=_pose_cost_jac)
+@jaxls.Cost.factory(jac_custom_with_cache_fn=_pose_cost_jac)
 def _pose_cost_analytical_jac(
     vals: jaxls.VarValues,
     robot: Robot,

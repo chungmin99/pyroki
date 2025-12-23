@@ -49,7 +49,8 @@ def _solve_ik_jax(
     target_position: jax.Array,
 ) -> jax.Array:
     joint_var = robot.joint_var_cls(0)
-    factors = [
+    variables = [joint_var]
+    costs = [
         pk.costs.pose_cost_analytic_jac(
             robot,
             joint_var,
@@ -60,14 +61,13 @@ def _solve_ik_jax(
             pos_weight=50.0,
             ori_weight=10.0,
         ),
-        pk.costs.limit_cost(
+        pk.costs.limit_constraint(
             robot,
             joint_var,
-            weight=100.0,
         ),
     ]
     sol = (
-        jaxls.LeastSquaresProblem(factors, [joint_var])
+        jaxls.LeastSquaresProblem(costs=costs, variables=variables)
         .analyze()
         .solve(
             verbose=False,

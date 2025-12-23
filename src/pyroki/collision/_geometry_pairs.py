@@ -3,7 +3,7 @@ from __future__ import annotations
 import jax.numpy as jnp
 from jaxtyping import Float, Array
 
-from ._geometry import HalfSpace, Sphere, Capsule, Heightmap
+from ._geometry import HalfSpace, Sphere, Capsule, Box, Heightmap
 from . import _utils
 
 
@@ -216,3 +216,122 @@ def heightmap_halfspace(
     min_dist = jnp.min(vertex_distances, axis=-1)
     assert min_dist.shape == batch_axes
     return min_dist
+
+
+# --- Box Collision Implementations ---
+
+
+def halfspace_box(halfspace: HalfSpace, box: Box) -> Float[Array, "*batch"]:
+    """Calculate distance between a halfspace and a box.
+
+    Computes signed distance of all 8 corners to the halfspace plane,
+    returns the minimum (most penetrating corner).
+    """
+    batch_axes = jnp.broadcast_shapes(halfspace.get_batch_axes(), box.get_batch_axes())
+
+    # Get box corners in world frame: (*batch, 8, 3)
+    corners = box.get_corners_world()
+
+    # Halfspace plane properties
+    hs_normal = halfspace.normal  # (*batch, 3)
+    hs_point = halfspace.pose.translation()  # (*batch, 3)
+
+    # Broadcast for corner computation
+    hs_normal = jnp.broadcast_to(hs_normal, batch_axes + (3,))
+    hs_point = jnp.broadcast_to(hs_point, batch_axes + (3,))
+    corners = jnp.broadcast_to(corners, batch_axes + (8, 3))
+
+    # Compute signed distance for each corner: dot(corner - point, normal)
+    # corners: (*batch, 8, 3), hs_point: (*batch, 3), hs_normal: (*batch, 3)
+    corner_dists = jnp.einsum(
+        "...ci,...i->...c", corners - hs_point[..., None, :], hs_normal
+    )  # (*batch, 8)
+
+    # Return minimum distance across all corners
+    min_dist = jnp.min(corner_dists, axis=-1)
+    return min_dist
+
+
+def _sphere_box_dist(
+    sphere_pos: Float[Array, "*batch 3"],
+    sphere_radius: Float[Array, "*batch"],
+    box: Box,
+) -> Float[Array, "*batch"]:
+    """Helper: Calculate distance between a sphere and a box."""
+    # Transform sphere center to box's local frame
+    local_center = box.pose.inverse().apply(sphere_pos)
+
+    # Clamp to box bounds to find closest point on box surface
+    half_ext = box.half_extent
+    closest = jnp.clip(local_center, -half_ext, half_ext)
+
+    # Distance from sphere center to closest point, minus radius
+    diff = local_center - closest
+    _, dist_to_surface = _utils.normalize_with_norm(diff)
+    dist = dist_to_surface - sphere_radius
+
+    return dist
+
+
+def sphere_box(sphere: Sphere, box: Box) -> Float[Array, "*batch"]:
+    """Calculate distance between a sphere and a box."""
+    return _sphere_box_dist(
+        sphere.pose.translation(),
+        sphere.radius,
+        box,
+    )
+
+
+def _point_to_box_sdf(
+    point: Float[Array, "*batch 3"],
+    half_ext: Float[Array, "*batch 3"],
+) -> Float[Array, "*batch"]:
+    """Signed distance from a point to an AABB centered at origin."""
+    # Clamp point to box bounds
+    closest = jnp.clip(point, -half_ext, half_ext)
+
+    # Distance to closest point on box surface (with safe gradient via epsilon)
+    diff = point - closest
+    _, dist = _utils.normalize_with_norm(diff)
+
+    # For inside case: compute penetration depth as distance to nearest face
+    face_dists = half_ext - jnp.abs(point)  # Distance to each face (positive inside)
+    min_face_dist = jnp.min(face_dists, axis=-1)
+
+    # If inside (dist ~= 0), return negative penetration; otherwise return positive dist
+    is_inside = dist < 1e-5
+    return jnp.where(is_inside, -min_face_dist, dist)
+
+
+def capsule_box(capsule: Capsule, box: Box) -> Float[Array, "*batch"]:
+    """Calculate signed distance between a capsule and a box.
+
+    Uses iterative closest point refinement between capsule axis and box,
+    then computes proper signed distance using box SDF.
+    """
+    cap_pos = capsule.pose.translation()
+    cap_axis = capsule.axis
+    cap_radius = capsule.radius
+    segment_offset = cap_axis * capsule.height[..., None] / 2
+
+    # Capsule endpoints in world frame
+    p1_world = cap_pos + segment_offset
+    p2_world = cap_pos - segment_offset
+
+    # Transform to box's local frame (box becomes AABB centered at origin)
+    p1_local = box.pose.inverse().apply(p1_world)
+    p2_local = box.pose.inverse().apply(p2_world)
+    half_ext = box.half_extent
+
+    # Iteration 1: closest point on segment to box center (origin)
+    center = jnp.zeros_like(p1_local)
+    pt_seg = _utils.closest_segment_point(p1_local, p2_local, center)
+    pt_box = jnp.clip(pt_seg, -half_ext, half_ext)
+
+    # Iteration 2: refine with closest point on segment to pt_box
+    pt_seg = _utils.closest_segment_point(p1_local, p2_local, pt_box)
+
+    # Compute signed distance from segment point to box
+    sdf = _point_to_box_sdf(pt_seg, half_ext)
+
+    return sdf - cap_radius

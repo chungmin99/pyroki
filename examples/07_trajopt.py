@@ -44,34 +44,29 @@ def main(robot_name: Literal["ur5", "panda"] = "panda"):
 
     # Define the trajectory problem:
     # - number of timesteps, timestep size
-    timesteps, dt = 25, 0.02
+    timesteps, dt = 50, 0.02
     # - the start and end poses.
     start_pos, end_pos = np.array([0.5, -0.3, 0.2]), np.array([0.5, 0.3, 0.2])
 
     # Define the obstacles:
     # - Ground
-    ground_coll = pk.collision.HalfSpace.from_point_and_normal(
-        np.array([0.0, 0.0, 0.0]), np.array([0.0, 0.0, 1.0])
-    )
-    # - Wall
+    # ground_coll = pk.collision.HalfSpace.from_point_and_normal(
+    #     np.array([0.0, 0.0, 0.0]), np.array([0.0, 0.0, 1.0])
+    # )
+    # - Wall (using Box collision geometry)
     wall_height = 0.4
     wall_width = 0.1
     wall_length = 0.4
-    wall_intervals = np.arange(start=0.3, stop=wall_length + 0.3, step=0.05)
-    translation = np.concatenate(
-        [
-            wall_intervals.reshape(-1, 1),
-            np.full((wall_intervals.shape[0], 1), 0.0),
-            np.full((wall_intervals.shape[0], 1), wall_height / 2),
-        ],
-        axis=1,
+    wall_coll = pk.collision.Box.from_extent(
+        extent=np.array([wall_length, wall_width, wall_height]),
+        position=np.array([0.5, 0.0, wall_height / 2]),
     )
-    wall_coll = pk.collision.Capsule.from_radius_height(
-        position=translation,
-        radius=np.full((translation.shape[0], 1), wall_width / 2),
-        height=np.full((translation.shape[0], 1), wall_height),
-    )
-    world_coll = [ground_coll, wall_coll]
+    # world_coll = [ground_coll, wall_coll]
+
+    # TODO: Constraints don't work with ground collision at the moment,
+    # because the robot is in collision already with it (which destabilizes things).
+    # We will fix this when we can have better robot collision geometries / handling in the future.
+    world_coll = [wall_coll]
 
     traj = pks.solve_trajopt(
         robot,
