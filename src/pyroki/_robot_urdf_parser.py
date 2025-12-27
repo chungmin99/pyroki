@@ -286,7 +286,6 @@ class RobotURDFParser:
         lower_limits_act_arr = jnp.array(lower_limit_act_list)
         upper_limits_act_arr = jnp.array(upper_limit_act_list)
         velocity_limits_act_arr = jnp.array(velocity_limit_act_list)
-        actuated_indices_arr = jnp.array(actuated_idx_list, dtype=jnp.int32)
         mimic_multiplier_arr = jnp.array(mimic_multiplier_list)
         mimic_offset_arr = jnp.array(mimic_offset_list)
         lower_limits_eff_arr = jnp.array(lower_limit_eff_list)

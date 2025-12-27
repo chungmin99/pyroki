@@ -5,7 +5,6 @@ import jax.numpy as jnp
 import jax_dataclasses as jdc
 import jaxlie
 import jaxls
-import numpy as onp
 import pyroki as pk
 from pyroki.collision import RobotCollision, Capsule
 from robot_descriptions.loaders.yourdfpy import load_robot_description
