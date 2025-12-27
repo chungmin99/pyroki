@@ -37,16 +37,20 @@ def _get_actuated_joints_applied_to_target(
 
     def body_fun(joint_idx, indices):
         # Find the corresponding active actuated joint.
+        actuated_indices = jnp.array(robot.joints.actuated_indices, dtype=jnp.int32)
+        mimic_act_indices = jnp.array(robot.joints.mimic_act_indices, dtype=jnp.int32)
+        parent_indices = jnp.array(robot.joints.parent_indices, dtype=jnp.int32)
+
         active_act_joint = jnp.where(
-            robot.joints.actuated_indices[joint_idx] != -1,
+            actuated_indices[joint_idx] != -1,
             # The current joint is actuated.
-            robot.joints.actuated_indices[joint_idx],
+            actuated_indices[joint_idx],
             # The current joint is not actuated; this is -1 if not a mimic joint.
-            robot.joints.mimic_act_indices[joint_idx],
+            mimic_act_indices[joint_idx],
         )
 
         # Find the parent of the current joint.
-        parent_joint = robot.joints.parent_indices[joint_idx]
+        parent_joint = parent_indices[joint_idx]
 
         # Continue traversing up the kinematic tree, using the parent joint.
         # This value may either go up or down, since there's no guarantee that
@@ -119,10 +123,11 @@ def pose_cost_analytic_jac(
 
     # Compute applied joints.
     robot = broadcast_batch_axes(robot)
-    base_link_mask = robot.links.parent_joint_indices == -1
-    parent_joint_indices = jnp.where(
-        base_link_mask, 0, robot.links.parent_joint_indices
+    link_parent_joint_indices = jnp.array(
+        robot.links.parent_joint_indices, dtype=jnp.int32
     )
+    base_link_mask = link_parent_joint_indices == -1
+    parent_joint_indices = jnp.where(base_link_mask, 0, link_parent_joint_indices)
     target_joint_idx = parent_joint_indices[
         tuple(jnp.arange(d) for d in parent_joint_indices.shape[:-1])
         + (target_link_index,)

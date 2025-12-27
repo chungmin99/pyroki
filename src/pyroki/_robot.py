@@ -91,10 +91,13 @@ class Robot:
     ) -> Float[Array, "*batch link_count 7"]:
         (*batch_axes, _, _) = Ts_world_joint.shape
         # Get the link poses.
-        base_link_mask = self.links.parent_joint_indices == -1
-        parent_joint_indices = jnp.where(
-            base_link_mask, 0, self.links.parent_joint_indices
+        # self.links.parent_joint_indices is Static[tuple], cast to array for indexing
+        link_parent_indices = jnp.array(
+            self.links.parent_joint_indices, dtype=jnp.int32
         )
+
+        base_link_mask = link_parent_indices == -1
+        parent_joint_indices = jnp.where(base_link_mask, 0, link_parent_indices)
         identity_pose = jaxlie.SE3.identity().wxyz_xyz
         Ts_world_link = jnp.where(
             base_link_mask[..., None],
@@ -127,11 +130,14 @@ class Robot:
         assert Ts_parent_child.shape == (*batch_axes, self.joints.num_joints, 7)
 
         # Topological sort helpers
-        topo_order = jnp.argsort(self.joints._topo_sort_inv)
-        Ts_parent_child_sorted = Ts_parent_child[..., self.joints._topo_sort_inv, :]
-        parent_orig_for_sorted_child = self.joints.parent_indices[
-            self.joints._topo_sort_inv
-        ]
+        # Static tuples must be cast to arrays for advanced indexing/argsort
+        topo_sort_inv = jnp.array(self.joints._topo_sort_inv, dtype=jnp.int32)
+        topo_order = jnp.argsort(topo_sort_inv)
+
+        Ts_parent_child_sorted = Ts_parent_child[..., topo_sort_inv, :]
+
+        parent_indices = jnp.array(self.joints.parent_indices, dtype=jnp.int32)
+        parent_orig_for_sorted_child = parent_indices[topo_sort_inv]
         idx_parent_joint_sorted = jnp.where(
             parent_orig_for_sorted_child == -1,
             -1,

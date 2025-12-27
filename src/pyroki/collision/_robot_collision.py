@@ -6,9 +6,10 @@ import jax
 import jax.numpy as jnp
 import jax_dataclasses as jdc
 import jaxlie
+import numpy as onp
 import trimesh
 import yourdfpy
-from jaxtyping import Array, Float, Int
+from jaxtyping import Array, Float
 from loguru import logger
 
 if TYPE_CHECKING:
@@ -30,9 +31,9 @@ class RobotCollision:
     coll: CollGeom
     """Collision geometries for the robot (relative to their parent link frame)."""
 
-    active_idx_i: Int[Array, " P"]
+    active_idx_i: jdc.Static[tuple[int, ...]]
     """Row indices (first link) of active self-collision pairs to check."""
-    active_idx_j: Int[Array, " P"]
+    active_idx_j: jdc.Static[tuple[int, ...]]
     """Column indices (second link) of active self-collision pairs to check."""
 
     @staticmethod
@@ -107,7 +108,7 @@ class RobotCollision:
         urdf: yourdfpy.URDF,
         user_ignore_pairs: tuple[tuple[str, str], ...],
         ignore_immediate_adjacents: bool,
-    ) -> Tuple[Int[Array, " P"], Int[Array, " P"]]:
+    ) -> tuple[tuple[int, ...], tuple[int, ...]]:
         """
         Computes the indices (i, j) of pairs where i < j and the pair should
         be actively checked for self-collision.
@@ -149,7 +150,10 @@ class RobotCollision:
         active_i = idx_i[should_check]
         active_j = idx_j[should_check]
 
-        return active_i, active_j
+        return (
+            tuple(onp.array(active_i).tolist()),
+            tuple(onp.array(active_j).tolist()),
+        )
 
     @staticmethod
     def _get_trimesh_collision_geometries(
@@ -351,7 +355,9 @@ class RobotCollision:
 
         # 3. Extract distances for the precomputed active pairs
         # Use advanced indexing with the stored indices
-        active_distances = dist_matrix[..., self.active_idx_i, self.active_idx_j]
+        idx_i = jnp.array(self.active_idx_i, dtype=jnp.int32)
+        idx_j = jnp.array(self.active_idx_j, dtype=jnp.int32)
+        active_distances = dist_matrix[..., idx_i, idx_j]
 
         # Expected shape check
         num_active_pairs = len(self.active_idx_i)

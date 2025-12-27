@@ -8,7 +8,7 @@ import numpy as onp
 import yourdfpy
 from jax import Array
 from jax import numpy as jnp
-from jaxtyping import Float, Int
+from jaxtyping import Float
 from loguru import logger
 
 
@@ -26,9 +26,9 @@ class JointInfo:
     """Twist parameters for each joint. Shape: (n_joints, 6)."""
     parent_transforms: Float[Array, "n_joints 7"]
     """Transform from parent joint to current joint. Shape: (n_joints, 7)."""
-    parent_indices: Int[Array, " n_joints"]
+    parent_indices: jdc.Static[tuple[int, ...]]
     """Index of the parent joint for each joint. Shape: (n_joints,)."""
-    actuated_indices: Int[Array, " n_joints"]
+    actuated_indices: jdc.Static[tuple[int, ...]]
     """Index of the associated actuated joint that drives each joint. -1 if mimic joint. Shape: (n_joints,)."""
 
     # Limits for actuated joints.
@@ -52,10 +52,10 @@ class JointInfo:
     """Mimic multiplier for each joint. Shape: (n_joints,). 1.0 if not a mimic joint."""
     mimic_offset: Float[Array, " n_joints"]
     """Mimic offset for each joint. Shape: (n_joints,). 0 if not a mimic joint."""
-    mimic_act_indices: Int[Array, " n_joints"]
+    mimic_act_indices: jdc.Static[tuple[int, ...]]
     """Index of the actuated joint that is mimicked by each joint. -1 if not a mimic joint. Shape: (n_joints,)."""
 
-    _topo_sort_inv: Int[Array, " n_joints"]
+    _topo_sort_inv: jdc.Static[tuple[int, ...]]
     """Inverse topological sort order, mapping sorted joint index to original joint index."""
 
     def _map_to_full_joint_space(
@@ -74,10 +74,12 @@ class JointInfo:
         )
 
         # Replace mimic indices with the actuated joint index they refer to.
+        mimic_act_indices = jnp.array(self.mimic_act_indices, dtype=jnp.int32)
+        actuated_indices = jnp.array(self.actuated_indices, dtype=jnp.int32)
         replace_mimic_indices = jnp.where(
-            self.mimic_act_indices == -1,
-            self.actuated_indices,
-            self.mimic_act_indices,
+            mimic_act_indices == -1,
+            actuated_indices,
+            mimic_act_indices,
         )
 
         safe_actuated_indices = jnp.where(
@@ -125,7 +127,7 @@ class LinkInfo:
 
     num_links: jdc.Static[int]
     names: jdc.Static[tuple[str, ...]]
-    parent_joint_indices: Int[Array, "n_links"]
+    parent_joint_indices: jdc.Static[tuple[int, ...]]
 
 
 class RobotURDFParser:
@@ -134,14 +136,14 @@ class RobotURDFParser:
     @staticmethod
     def _topologically_sort_joints(
         urdf: yourdfpy.URDF,
-    ) -> Int[Array, " joints"]:
+    ) -> tuple[int, ...]:
         """Calculates the topological processing order for joints and actuated joints.
 
         Ensures joints are processed parent-first for kinematic calculations, respecting
         mimic joint dependencies.
 
         Returns:
-            - joint_order: Array of original joint indices sorted topologically.
+            - joint_order: Tuple of original joint indices sorted topologically.
         """
         original_joints = list(urdf.joint_map.values())
         num_joints = len(original_joints)
@@ -189,12 +191,11 @@ class RobotURDFParser:
                 )
 
         # Generate the topological order based on original indices
-        joint_order = jnp.array(
-            [original_name_to_idx[j.name] for j in sorted_joint_objects],
-            dtype=jnp.int32,
+        joint_order = tuple(
+            int(original_name_to_idx[j.name]) for j in sorted_joint_objects
         )
 
-        if jnp.any(joint_order != jnp.arange(num_joints)):
+        if jnp.any(jnp.array(joint_order) != jnp.arange(num_joints)):
             logger.info(
                 "Joints were not in topological order; they will be internally sorted."
             )
@@ -298,8 +299,8 @@ class RobotURDFParser:
             num_actuated_joints=len(urdf.actuated_joints),
             twists=jnp.array(joint_twists_list),
             parent_transforms=jnp.array(parent_transform_list),
-            parent_indices=jnp.array(parent_idx_list, dtype=jnp.int32),
-            actuated_indices=actuated_indices_arr,
+            parent_indices=tuple(parent_idx_list),
+            actuated_indices=tuple(actuated_idx_list),
             lower_limits=lower_limits_act_arr,
             upper_limits=upper_limits_act_arr,
             velocity_limits=velocity_limits_act_arr,
@@ -310,30 +311,30 @@ class RobotURDFParser:
             velocity_limits_all=velocity_limits_eff_arr,
             mimic_multiplier=mimic_multiplier_arr,
             mimic_offset=mimic_offset_arr,
-            mimic_act_indices=jnp.array(mimic_act_idx_list),
+            mimic_act_indices=tuple(mimic_act_idx_list),
             _topo_sort_inv=topo_sort_inv_val,
         )
         assert joint_info.twists.shape == (joint_info.num_joints, 6)
         assert joint_info.parent_transforms.shape == (joint_info.num_joints, 7)
-        assert joint_info.parent_indices.shape == (joint_info.num_joints,)
-        assert joint_info.actuated_indices.shape == (joint_info.num_joints,)
+        assert len(joint_info.parent_indices) == joint_info.num_joints
+        assert len(joint_info.actuated_indices) == joint_info.num_joints
         assert joint_info.lower_limits.shape == (joint_info.num_actuated_joints,)
         assert joint_info.upper_limits.shape == (joint_info.num_actuated_joints,)
         assert joint_info.velocity_limits.shape == (joint_info.num_actuated_joints,)
         assert joint_info.lower_limits_all.shape == (joint_info.num_joints,)
         assert joint_info.upper_limits_all.shape == (joint_info.num_joints,)
         assert joint_info.velocity_limits_all.shape == (joint_info.num_joints,)
-        assert joint_info._topo_sort_inv.shape == (joint_info.num_joints,)
+        assert len(joint_info._topo_sort_inv) == joint_info.num_joints
         assert joint_info.mimic_multiplier.shape == (joint_info.num_joints,)
         assert joint_info.mimic_offset.shape == (joint_info.num_joints,)
-        assert joint_info.mimic_act_indices.shape == (joint_info.num_joints,)
+        assert len(joint_info.mimic_act_indices) == joint_info.num_joints
 
         link_info = LinkInfo(
             num_links=len(link_name_list),
             names=tuple(link_name_list),
-            parent_joint_indices=jnp.array(parent_joint_idx_list, dtype=jnp.int32),
+            parent_joint_indices=tuple(parent_joint_idx_list),
         )
-        assert link_info.parent_joint_indices.shape == (link_info.num_links,)
+        assert len(link_info.parent_joint_indices) == link_info.num_links
         return joint_info, link_info
 
     @staticmethod
