@@ -110,6 +110,45 @@ def test_unit_collision_batching():
     assert jnp.all(results[1:] > results[:-1])  # Verify variation was preserved
 
 
+def test_unit_collision_batching_topology_mismatch():
+    """
+    Unit test: Emphasize that RobotCollision can be batched IF AND ONLY IF
+    the non-batchable elements (topological properties like link structure/indices)
+    are identical across the batch.
+    """
+    # 1. Base collision geometry
+    coll = Capsule.from_radius_height(jnp.array([0.1, 0.1]), jnp.array([1.0, 1.0]))
+
+    # 2. Define two RobotCollision objects with DIFFERENT topologies (active_idx_j)
+    # These fields are marked as jdc.Static, so they are part of the PyTree structure.
+    rc1 = RobotCollision(
+        num_links=2,
+        link_names=("l1", "l2"),
+        coll=coll,
+        active_idx_i=(0,),
+        active_idx_j=(1,),
+    )
+    rc2 = RobotCollision(
+        num_links=2,
+        link_names=("l1", "l2"),
+        coll=coll,
+        active_idx_i=(0,),
+        active_idx_j=(0,),  # <--- Difference here
+    )
+
+    # 3. Attempting to batch them (e.g. stack) should fail because structures differ.
+    try:
+        jax.tree.map(lambda x, y: jnp.stack([x, y]), rc1, rc2)
+    except ValueError as e:
+        # Expected error: "Mismatch custom node data..."
+        assert "Mismatch custom node data" in str(e)
+        return
+
+    raise AssertionError(
+        "Batching incompatible RobotCollision objects should have failed!"
+    )
+
+
 def test_integration_ik_basic():
     """Integration: Standard usage (Shared Robot, Batched Targets)."""
     urdf = load_robot_description("panda_description")
