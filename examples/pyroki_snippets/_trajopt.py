@@ -220,9 +220,6 @@ def solve_iks_with_collision(
     sol = (
         jaxls.LeastSquaresProblem(costs=costs, variables=variables)
         .analyze()
-        .solve(
-            verbose=False,
-            augmented_lagrangian=jaxls.AugmentedLagrangianConfig(max_iterations=5),
-        )
+        .solve(verbose=False)
     )
     return sol[joint_var_0], sol[joint_var_1]

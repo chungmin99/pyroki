@@ -4,12 +4,10 @@ Shadow Hand retargeting example, with costs to maintain contact with the object.
 Find and unzip the shadowhand URDF at `assets/hand_retargeting/shadowhand_urdf.zip`.
 """
 
-import time
-from typing import Tuple, TypedDict
-from pathlib import Path
 import pickle
-import trimesh
-from scipy.spatial.transform import Rotation as R
+import time
+from pathlib import Path
+from typing import Tuple, TypedDict
 
 import jax
 import jax.numpy as jnp
@@ -17,16 +15,17 @@ import jax_dataclasses as jdc
 import jaxlie
 import jaxls
 import numpy as onp
-import viser
-from viser.extras import ViserUrdf
-import yourdfpy
-
 import pyroki as pk
+import trimesh
+import viser
+import yourdfpy
+from scipy.spatial.transform import Rotation as R
+from viser.extras import ViserUrdf
 
 from retarget_helpers._utils import (
+    MANO_TO_SHADOW_MAPPING,
     create_conn_tree,
     get_mapping_from_mano_to_shadow,
-    MANO_TO_SHADOW_MAPPING,
 )
 
 
@@ -434,9 +433,7 @@ def solve_retargeting(
             ],
         )
         .analyze()
-        .solve(
-            augmented_lagrangian=jaxls.AugmentedLagrangianConfig(max_iterations=5),
-        )
+        .solve()
     )
     transform = solution[var_Ts_world_root]
     offset = solution[var_offset]

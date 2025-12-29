@@ -3,9 +3,7 @@ import jax.numpy as jnp
 import jax_dataclasses as jdc
 import jaxlie
 import jaxls
-
 import numpy as onp
-
 import pyroki as pk
 
 
@@ -128,7 +126,6 @@ def _solve_ik_jax(
                 [joint_var.with_value(prev_cfg), base_var]
             ),
             verbose=False,
-            augmented_lagrangian=jaxls.AugmentedLagrangianConfig(max_iterations=2),
         )
     )
     return sol[base_var], sol[joint_var]

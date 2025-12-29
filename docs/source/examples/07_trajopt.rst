@@ -77,7 +77,7 @@ All examples can be run by first cloning the PyRoki repository, which includes t
 
             # TODO: Constraints don't work with ground collision at the moment,
             # because the robot is in collision already with it (which destabilizes things).
-            # We will fix this if we can have better robot collision geometries / handling.
+            # We will fix this when we can have better robot collision geometries / handling in the future.
             world_coll = [wall_coll]
 
             traj = pks.solve_trajopt(

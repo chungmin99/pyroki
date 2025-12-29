@@ -372,9 +372,7 @@ All examples can be run by first cloning the PyRoki repository, which includes t
                     ],
                 )
                 .analyze()
-                .solve(
-                    augmented_lagrangian=jaxls.AugmentedLagrangianConfig(max_iterations=5),
-                )
+                .solve()
             )
             transform = solution[var_Ts_world_root]
             offset = solution[var_offset]

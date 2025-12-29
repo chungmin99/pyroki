@@ -66,7 +66,6 @@ def _solve_ik_coll(
         .solve(
             verbose=False,
             linear_solver="dense_cholesky",
-            augmented_lagrangian=jaxls.AugmentedLagrangianConfig(max_iterations=3),
         )
     )
     return sol[joint_var]
