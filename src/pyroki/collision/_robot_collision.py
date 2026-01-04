@@ -9,7 +9,7 @@ import jaxlie
 import numpy as onp
 import trimesh
 import yourdfpy
-from jaxtyping import Array, Float
+from jaxtyping import Array, Float, Int
 from loguru import logger
 
 if TYPE_CHECKING:
@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 
 from .._robot_urdf_parser import RobotURDFParser
 from ._collision import collide, pairwise_collide
-from ._geometry import Capsule, CollGeom
+from ._geometry import Capsule, CollGeom, Sphere
 
 
 @jdc.pytree_dataclass
@@ -35,6 +35,22 @@ class RobotCollision:
     """Row indices (first link) of active self-collision pairs to check."""
     active_idx_j: jdc.Static[tuple[int, ...]]
     """Column indices (second link) of active self-collision pairs to check."""
+
+    # Fields for sphere-based collision (variable geometries per link)
+    max_geoms_per_link: jdc.Static[int] = 1
+    """Maximum number of geometries (spheres) per link. Used for padding."""
+    geom_counts: Int[Array, " num_links"] | None = None
+    """Actual number of geometries per link (None for capsule mode)."""
+
+    # Geometry-pair indices for sphere self-collision
+    geom_pair_link_i: jdc.Static[tuple[int, ...] | None] = None
+    """Link index for first geometry in each active pair."""
+    geom_pair_idx_i: jdc.Static[tuple[int, ...] | None] = None
+    """Geometry index within link_i for each active pair."""
+    geom_pair_link_j: jdc.Static[tuple[int, ...] | None] = None
+    """Link index for second geometry in each active pair."""
+    geom_pair_idx_j: jdc.Static[tuple[int, ...] | None] = None
+    """Geometry index within link_j for each active pair."""
 
     @staticmethod
     def from_urdf(
@@ -103,6 +119,129 @@ class RobotCollision:
         )
 
     @staticmethod
+    def from_sphere_decomposition(
+        sphere_decomposition: dict[str, list[dict]],
+        link_names: tuple[str, ...],
+        urdf: yourdfpy.URDF | None = None,
+        user_ignore_pairs: tuple[tuple[str, str], ...] = (),
+        ignore_immediate_adjacents: bool = True,
+    ) -> "RobotCollision":
+        """
+        Build a RobotCollision model from sphere decomposition data.
+
+        Args:
+            sphere_decomposition: Dict mapping link names to lists of sphere specs.
+                Format: {'link_name': [{'center': [x,y,z], 'radius': r}, ...], ...}
+                Links not in this dict will have no collision geometry (empty).
+            link_names: Ordered tuple of link names matching Robot.links.names.
+            urdf: Optional URDF for computing ignore pairs from adjacency.
+                Required if ignore_immediate_adjacents=True.
+            user_ignore_pairs: Additional pairs of link names to ignore for self-collision.
+            ignore_immediate_adjacents: If True, automatically ignore collisions
+                between adjacent (parent/child) links based on the URDF structure.
+
+        Returns:
+            RobotCollision configured for sphere-based collision checking.
+        """
+        num_links = len(link_names)
+
+        # Compute geometry counts and max_geoms_per_link
+        geom_counts_list: list[int] = []
+        for link_name in link_names:
+            spheres = sphere_decomposition.get(link_name, [])
+            geom_counts_list.append(len(spheres))
+
+        max_geoms = max(geom_counts_list) if geom_counts_list else 1
+        max_geoms = max(max_geoms, 1)  # At least 1 to avoid zero-size arrays
+        geom_counts = onp.array(geom_counts_list, dtype=onp.int32)
+
+        # Build padded sphere arrays
+        all_centers: list[list[list[float]]] = []
+        all_radii: list[list[float]] = []
+
+        for link_name in link_names:
+            spheres = sphere_decomposition.get(link_name, [])
+            link_centers: list[list[float]] = []
+            link_radii: list[float] = []
+
+            for s in spheres:
+                link_centers.append(list(s["center"]))
+                link_radii.append(float(s["radius"]))
+
+            # Pad with zero-radius spheres at origin
+            while len(link_centers) < max_geoms:
+                link_centers.append([0.0, 0.0, 0.0])
+                link_radii.append(0.0)
+
+            all_centers.append(link_centers)
+            all_radii.append(link_radii)
+
+        # Create batched Sphere with shape (num_links, max_geoms)
+        centers_array = jnp.array(all_centers)  # (num_links, max_geoms, 3)
+        radii_array = jnp.array(all_radii)  # (num_links, max_geoms)
+        spheres = Sphere.from_center_and_radius(centers_array, radii_array)
+        assert spheres.get_batch_axes() == (num_links, max_geoms)
+
+        # Compute geometry-pair indices
+        geom_pair_link_i, geom_pair_idx_i, geom_pair_link_j, geom_pair_idx_j = (
+            RobotCollision._compute_geometry_pair_indices(
+                link_names=link_names,
+                geom_counts=geom_counts,
+                urdf=urdf,
+                user_ignore_pairs=user_ignore_pairs,
+                ignore_immediate_adjacents=ignore_immediate_adjacents,
+            )
+        )
+
+        # Also compute link-level active pairs for compatibility
+        active_idx_i, active_idx_j = RobotCollision._compute_active_pair_indices_from_ignore_matrix(
+            link_names=link_names,
+            urdf=urdf,
+            user_ignore_pairs=user_ignore_pairs,
+            ignore_immediate_adjacents=ignore_immediate_adjacents,
+        )
+
+        logger.info(
+            f"Created RobotCollision with {num_links} links, "
+            f"{max_geoms} max spheres/link, and "
+            f"{len(geom_pair_link_i)} active geometry pairs."
+        )
+
+        return RobotCollision(
+            num_links=num_links,
+            link_names=link_names,
+            coll=spheres,
+            active_idx_i=active_idx_i,
+            active_idx_j=active_idx_j,
+            max_geoms_per_link=max_geoms,
+            geom_counts=jnp.array(geom_counts),
+            geom_pair_link_i=geom_pair_link_i,
+            geom_pair_idx_i=geom_pair_idx_i,
+            geom_pair_link_j=geom_pair_link_j,
+            geom_pair_idx_j=geom_pair_idx_j,
+        )
+
+    @staticmethod
+    def _compute_active_pair_indices_from_ignore_matrix(
+        link_names: tuple[str, ...],
+        urdf: yourdfpy.URDF | None,
+        user_ignore_pairs: tuple[tuple[str, str], ...],
+        ignore_immediate_adjacents: bool,
+    ) -> tuple[tuple[int, ...], tuple[int, ...]]:
+        """Compute link-level active pair indices using the ignore matrix helper."""
+        num_links = len(link_names)
+        ignore_matrix = RobotCollision._build_ignore_matrix(
+            link_names, urdf, user_ignore_pairs, ignore_immediate_adjacents
+        )
+
+        idx_i, idx_j = onp.tril_indices(num_links, k=-1)
+        should_check = ~ignore_matrix[idx_i, idx_j]
+        active_i = idx_i[should_check]
+        active_j = idx_j[should_check]
+
+        return (tuple(active_i.tolist()), tuple(active_j.tolist()))
+
+    @staticmethod
     def _compute_active_pair_indices(
         link_names: tuple[str, ...],
         urdf: yourdfpy.URDF,
@@ -153,6 +292,87 @@ class RobotCollision:
         return (
             tuple(onp.array(active_i).tolist()),
             tuple(onp.array(active_j).tolist()),
+        )
+
+    @staticmethod
+    def _build_ignore_matrix(
+        link_names: tuple[str, ...],
+        urdf: yourdfpy.URDF | None,
+        user_ignore_pairs: tuple[tuple[str, str], ...],
+        ignore_immediate_adjacents: bool,
+    ) -> onp.ndarray:
+        """Build a boolean matrix indicating which link pairs should be ignored."""
+        num_links = len(link_names)
+        link_name_to_idx = {name: i for i, name in enumerate(link_names)}
+        ignore_matrix = onp.zeros((num_links, num_links), dtype=bool)
+
+        # Ignore self-pairs
+        onp.fill_diagonal(ignore_matrix, True)
+
+        # Ignore adjacent links from URDF
+        if ignore_immediate_adjacents and urdf is not None:
+            for joint in urdf.joint_map.values():
+                parent_name = joint.parent
+                child_name = joint.child
+                if parent_name in link_name_to_idx and child_name in link_name_to_idx:
+                    parent_idx = link_name_to_idx[parent_name]
+                    child_idx = link_name_to_idx[child_name]
+                    ignore_matrix[parent_idx, child_idx] = True
+                    ignore_matrix[child_idx, parent_idx] = True
+
+        # Ignore user-specified pairs
+        for name1, name2 in user_ignore_pairs:
+            if name1 in link_name_to_idx and name2 in link_name_to_idx:
+                idx1 = link_name_to_idx[name1]
+                idx2 = link_name_to_idx[name2]
+                ignore_matrix[idx1, idx2] = True
+                ignore_matrix[idx2, idx1] = True
+
+        return ignore_matrix
+
+    @staticmethod
+    def _compute_geometry_pair_indices(
+        link_names: tuple[str, ...],
+        geom_counts: onp.ndarray,
+        urdf: yourdfpy.URDF | None,
+        user_ignore_pairs: tuple[tuple[str, str], ...],
+        ignore_immediate_adjacents: bool,
+    ) -> tuple[tuple[int, ...], tuple[int, ...], tuple[int, ...], tuple[int, ...]]:
+        """
+        Compute geometry-level pair indices for sphere self-collision.
+
+        For each non-ignored link pair (i < j), enumerates all sphere pairs.
+
+        Returns:
+            Tuple of (link_i, idx_i, link_j, idx_j) where each is a tuple of indices.
+        """
+        num_links = len(link_names)
+        ignore_matrix = RobotCollision._build_ignore_matrix(
+            link_names, urdf, user_ignore_pairs, ignore_immediate_adjacents
+        )
+
+        pairs_link_i: list[int] = []
+        pairs_idx_i: list[int] = []
+        pairs_link_j: list[int] = []
+        pairs_idx_j: list[int] = []
+
+        for li in range(num_links):
+            for lj in range(li + 1, num_links):
+                if ignore_matrix[li, lj]:
+                    continue
+                # Enumerate all geometry pairs between these links
+                for gi in range(geom_counts[li]):
+                    for gj in range(geom_counts[lj]):
+                        pairs_link_i.append(li)
+                        pairs_idx_i.append(gi)
+                        pairs_link_j.append(lj)
+                        pairs_idx_j.append(gj)
+
+        return (
+            tuple(pairs_link_i),
+            tuple(pairs_idx_i),
+            tuple(pairs_link_j),
+            tuple(pairs_idx_j),
         )
 
     @staticmethod
@@ -263,7 +483,19 @@ class RobotCollision:
         Ts_link_world_wxyz_xyz = robot.forward_kinematics(cfg)
         Ts_link_world = jaxlie.SE3(Ts_link_world_wxyz_xyz)
 
-        return self.coll.transform(Ts_link_world)
+        if self.geom_counts is None:
+            # Capsule path: coll shape (num_links,)
+            return self.coll.transform(Ts_link_world)
+        else:
+            # Sphere path: coll shape (num_links, max_geoms)
+            # FK shape: (*batch, num_links, 7) -> broadcast to (*batch, num_links, max_geoms, 7)
+            Ts_expanded = jaxlie.SE3(
+                jnp.broadcast_to(
+                    Ts_link_world.wxyz_xyz[..., None, :],
+                    Ts_link_world.wxyz_xyz.shape[:-1] + (self.max_geoms_per_link, 7),
+                )
+            )
+            return self.coll.transform(Ts_expanded)
 
     def get_swept_capsules(
         self,
@@ -343,27 +575,55 @@ class RobotCollision:
 
         # 1. Get collision geometry at the current config
         coll = self.at_config(robot, cfg)
-        assert coll.get_batch_axes() == (*batch_axes, self.num_links)
 
-        # 2. Compute all pairwise distances using the imported function
-        dist_matrix = pairwise_collide(coll, coll)
-        assert dist_matrix.shape == (
-            *batch_axes,
-            self.num_links,
-            self.num_links,
-        )
+        if self.geom_pair_link_i is None:
+            # Capsule path: use pairwise_collide on all links
+            assert coll.get_batch_axes() == (*batch_axes, self.num_links)
 
-        # 3. Extract distances for the precomputed active pairs
-        # Use advanced indexing with the stored indices
-        idx_i = jnp.array(self.active_idx_i, dtype=jnp.int32)
-        idx_j = jnp.array(self.active_idx_j, dtype=jnp.int32)
-        active_distances = dist_matrix[..., idx_i, idx_j]
+            # 2. Compute all pairwise distances using the imported function
+            dist_matrix = pairwise_collide(coll, coll)
+            assert dist_matrix.shape == (
+                *batch_axes,
+                self.num_links,
+                self.num_links,
+            )
 
-        # Expected shape check
-        num_active_pairs = len(self.active_idx_i)
-        assert active_distances.shape == (*batch_axes, num_active_pairs)
+            # 3. Extract distances for the precomputed active pairs
+            idx_i = jnp.array(self.active_idx_i, dtype=jnp.int32)
+            idx_j = jnp.array(self.active_idx_j, dtype=jnp.int32)
+            active_distances = dist_matrix[..., idx_i, idx_j]
 
-        return active_distances
+            num_active_pairs = len(self.active_idx_i)
+            assert active_distances.shape == (*batch_axes, num_active_pairs)
+
+            return active_distances
+        else:
+            # Sphere path: use geometry-pair indexing
+            # coll shape: (*batch, num_links, max_geoms)
+            assert coll.get_batch_axes() == (
+                *batch_axes,
+                self.num_links,
+                self.max_geoms_per_link,
+            )
+
+            link_i = jnp.array(self.geom_pair_link_i, dtype=jnp.int32)
+            idx_i = jnp.array(self.geom_pair_idx_i, dtype=jnp.int32)
+            link_j = jnp.array(self.geom_pair_link_j, dtype=jnp.int32)
+            idx_j = jnp.array(self.geom_pair_idx_j, dtype=jnp.int32)
+
+            # Extract sphere pairs using advanced indexing
+            # coll.pose.wxyz_xyz shape: (*batch, num_links, max_geoms, 7)
+            # We need spheres at [link_i, idx_i] and [link_j, idx_j]
+            spheres_i = jax.tree.map(lambda x: x[..., link_i, idx_i, :], coll)
+            spheres_j = jax.tree.map(lambda x: x[..., link_j, idx_j, :], coll)
+
+            # collide expects CollGeom objects, so reconstruct Spheres
+            active_distances = collide(spheres_i, spheres_j)
+
+            num_active_pairs = len(self.geom_pair_link_i)
+            assert active_distances.shape == (*batch_axes, num_active_pairs)
+
+            return active_distances
 
     def compute_world_collision_distance(
         self,
@@ -390,41 +650,85 @@ class RobotCollision:
             Positive distance means separation, negative means penetration.
         """
         # 1. Get robot collision geometry at the current config
-        # Shape: (*batch_cfg, N, ...)
         coll_robot_world = self.at_config(robot, cfg)
         N = self.num_links
-        assert coll_robot_world.get_batch_axes()[-1] == N
-        batch_cfg_shape = coll_robot_world.get_batch_axes()[:-1]
 
         # 2. Normalize world_geom shape and determine M
         world_axes = world_geom.get_batch_axes()
         if len(world_axes) == 0:  # Single world object
-            # Use the object's broadcast_to method to add the M=1 axis correctly
             _world_geom = world_geom.broadcast_to((1,))
             M = 1
-            batch_world_shape = ()
+            batch_world_shape: tuple[int, ...] = ()
         else:  # Multiple world objects
             _world_geom = world_geom
             M = world_axes[-1]
             batch_world_shape = world_axes[:-1]
 
-        # 3. Compute distances: Map collide over robot links (axis -2) vs _world_geom (None)
-        # _world_geom is guaranteed to have the M axis now.
-        _collide_links_vs_world = jax.vmap(collide, in_axes=(-2, None), out_axes=(-2))
-        dist_matrix = _collide_links_vs_world(coll_robot_world, _world_geom)
+        if self.geom_counts is None:
+            # Capsule path: coll shape (*batch_cfg, N)
+            assert coll_robot_world.get_batch_axes()[-1] == N
+            batch_cfg_shape = coll_robot_world.get_batch_axes()[:-1]
 
-        # 4. Result shape check
-        # Calculate expected shape based on broadcasting rules
-        expected_batch_combined = jnp.broadcast_shapes(
-            batch_cfg_shape, batch_world_shape
-        )
-        expected_shape = (*expected_batch_combined, N, M)
+            # 3. Compute distances: Map collide over robot links (axis -2) vs _world_geom (None)
+            _collide_links_vs_world = jax.vmap(
+                collide, in_axes=(-2, None), out_axes=(-2)
+            )
+            dist_matrix = _collide_links_vs_world(coll_robot_world, _world_geom)
 
-        # Perform the assertion without try-except or complex logic
-        assert dist_matrix.shape == expected_shape, (
-            f"Output shape mismatch. Expected {expected_shape}, Got {dist_matrix.shape}. "
-            f"Robot axes: {coll_robot_world.get_batch_axes()}, Original World axes: {world_geom.get_batch_axes()}"
-        )
+            # 4. Result shape check
+            expected_batch_combined = jnp.broadcast_shapes(
+                batch_cfg_shape, batch_world_shape
+            )
+            expected_shape = (*expected_batch_combined, N, M)
 
-        # 5. Return the distance matrix
-        return dist_matrix
+            assert dist_matrix.shape == expected_shape, (
+                f"Output shape mismatch. Expected {expected_shape}, Got {dist_matrix.shape}. "
+                f"Robot axes: {coll_robot_world.get_batch_axes()}, Original World axes: {world_geom.get_batch_axes()}"
+            )
+
+            return dist_matrix
+        else:
+            # Sphere path: coll shape (*batch_cfg, N, max_geoms)
+            assert coll_robot_world.get_batch_axes()[-2:] == (
+                N,
+                self.max_geoms_per_link,
+            )
+            batch_cfg_shape = coll_robot_world.get_batch_axes()[:-2]
+
+            # Compute distances for all spheres vs all world objects
+            # vmap over links (axis -3) and geometries (axis -2)
+            _collide_geoms_vs_world = jax.vmap(
+                collide, in_axes=(-2, None), out_axes=(-2)
+            )
+            _collide_links_vs_world = jax.vmap(
+                _collide_geoms_vs_world, in_axes=(-3, None), out_axes=(-3)
+            )
+            dist_full = _collide_links_vs_world(coll_robot_world, _world_geom)
+            # dist_full shape: (*batch_combined, N, max_geoms, M)
+
+            # Mask out padding spheres and take min over geometries per link
+            # geom_counts shape: (N,)
+            # valid_mask shape: (N, max_geoms)
+            valid_mask = (
+                jnp.arange(self.max_geoms_per_link)[None, :]
+                < self.geom_counts[:, None]
+            )
+            # Broadcast mask to dist_full shape and apply
+            # valid_mask needs shape: (N, max_geoms, 1) for broadcasting with (..., N, max_geoms, M)
+            masked_dist = jnp.where(
+                valid_mask[..., None], dist_full, jnp.inf
+            )
+            dist_matrix = jnp.min(masked_dist, axis=-2)  # (*batch_combined, N, M)
+
+            # Result shape check
+            expected_batch_combined = jnp.broadcast_shapes(
+                batch_cfg_shape, batch_world_shape
+            )
+            expected_shape = (*expected_batch_combined, N, M)
+
+            assert dist_matrix.shape == expected_shape, (
+                f"Output shape mismatch. Expected {expected_shape}, Got {dist_matrix.shape}. "
+                f"Robot axes: {coll_robot_world.get_batch_axes()}, Original World axes: {world_geom.get_batch_axes()}"
+            )
+
+            return dist_matrix
