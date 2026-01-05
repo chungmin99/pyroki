@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from pyroki._robot import Robot
 
 from .._robot_urdf_parser import RobotURDFParser
-from ._collision import collide, pairwise_collide
+from ._collision import collide
 from ._geometry import Capsule, CollGeom, Sphere
 
 
@@ -511,39 +511,14 @@ class RobotCollision:
         # Get collision geometry at the current config
         coll = self.at_config(robot, cfg)
 
-        if not self._is_sphere_mode:
-            # Capsule path: use pairwise_collide on all links
-            assert coll.get_batch_axes() == (*batch_axes, self.num_links)
+        # Extract geometry pairs using precomputed indices
+        idx_i = jnp.array(self.active_idx_i, dtype=jnp.int32)
+        idx_j = jnp.array(self.active_idx_j, dtype=jnp.int32)
 
-            # Compute all pairwise distances
-            dist_matrix = pairwise_collide(coll, coll)
-            assert dist_matrix.shape == (
-                *batch_axes,
-                self.num_links,
-                self.num_links,
-            )
+        coll_i = jax.tree.map(lambda x: x[..., idx_i, :], coll)
+        coll_j = jax.tree.map(lambda x: x[..., idx_j, :], coll)
 
-            # Extract distances for the precomputed active pairs
-            idx_i = jnp.array(self.active_idx_i, dtype=jnp.int32)
-            idx_j = jnp.array(self.active_idx_j, dtype=jnp.int32)
-            active_distances = dist_matrix[..., idx_i, idx_j]
-        else:
-            # Sphere path: use flat geometry indexing (unified with capsule approach)
-            num_geoms = (
-                len(self._sphere_link_indices)
-                if self._sphere_link_indices is not None
-                else 0
-            )
-            assert coll.get_batch_axes() == (*batch_axes, num_geoms)
-
-            # Extract sphere pairs using flat indices
-            idx_i = jnp.array(self.active_idx_i, dtype=jnp.int32)
-            idx_j = jnp.array(self.active_idx_j, dtype=jnp.int32)
-
-            spheres_i = jax.tree.map(lambda x: x[..., idx_i, :], coll)
-            spheres_j = jax.tree.map(lambda x: x[..., idx_j, :], coll)
-
-            active_distances = collide(spheres_i, spheres_j)
+        active_distances = collide(coll_i, coll_j)
 
         num_active_pairs = len(self.active_idx_i)
         assert active_distances.shape == (*batch_axes, num_active_pairs)
