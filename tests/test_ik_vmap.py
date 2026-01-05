@@ -86,6 +86,7 @@ def test_unit_collision_batching():
         coll=coll,
         active_idx_i=(0,),
         active_idx_j=(1,),  # Static tuples
+        _geom_to_link_idx=jnp.arange(2, dtype=jnp.int32),
     )
 
     # 2. Manually broadcast to batch size 5 with variation
@@ -126,6 +127,7 @@ def test_unit_collision_batching_topology_mismatch():
         coll=coll,
         active_idx_i=(0,),
         active_idx_j=(1,),
+        _geom_to_link_idx=jnp.arange(2, dtype=jnp.int32),
     )
     rc2 = RobotCollision(
         num_links=2,
@@ -133,6 +135,7 @@ def test_unit_collision_batching_topology_mismatch():
         coll=coll,
         active_idx_i=(0,),
         active_idx_j=(0,),  # <--- Difference here
+        _geom_to_link_idx=jnp.arange(2, dtype=jnp.int32),
     )
 
     # 3. Attempting to batch them (e.g. stack) should fail because structures differ.

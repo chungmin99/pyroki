@@ -36,9 +36,8 @@ class RobotCollision:
     active_idx_j: jdc.Static[tuple[int, ...]]
     """Second index of active self-collision pairs (link indices for capsule, geometry indices for sphere)."""
 
-    # Fields for sphere-based collision
-    _sphere_link_indices: Int[Array, " num_geoms"] | None = None
-    """Maps each sphere to its parent link index (for FK transform lookup). None for capsule mode."""
+    _geom_to_link_idx: Int[Array, " num_geoms"]
+    """Maps each geometry to its parent link index (for FK transform lookup)."""
 
     @staticmethod
     def from_urdf(
@@ -104,6 +103,7 @@ class RobotCollision:
             active_idx_i=active_idx_i,
             active_idx_j=active_idx_j,
             coll=capsules,
+            _geom_to_link_idx=jnp.arange(link_info.num_links, dtype=jnp.int32),
         )
 
     @staticmethod
@@ -195,7 +195,7 @@ class RobotCollision:
             coll=spheres,
             active_idx_i=active_idx_i,
             active_idx_j=active_idx_j,
-            _sphere_link_indices=jnp.array(sphere_link_indices, dtype=jnp.int32),
+            _geom_to_link_idx=jnp.array(sphere_link_indices, dtype=jnp.int32),
         )
 
     @staticmethod
@@ -375,19 +375,9 @@ class RobotCollision:
         Ts_link_world_wxyz_xyz = robot.forward_kinematics(cfg)
         Ts_link_world = jaxlie.SE3(Ts_link_world_wxyz_xyz)
 
-        if isinstance(self.coll, Capsule):
-            # Capsule path: coll shape (num_links,)
-            return self.coll.transform(Ts_link_world)
-        elif isinstance(self.coll, Sphere):
-            # Sphere path: coll shape (num_geoms,)
-            # Index FK by link for each sphere using _sphere_link_indices
-            assert self._sphere_link_indices is not None
-            Ts_per_sphere = jaxlie.SE3(
-                Ts_link_world.wxyz_xyz[..., self._sphere_link_indices, :]
-            )
-            return self.coll.transform(Ts_per_sphere)
-        else:
-            raise TypeError(f"Unsupported collision geometry type: {type(self.coll)}")
+        # Index FK transforms by link for each geometry
+        Ts_per_geom = jaxlie.SE3(Ts_link_world.wxyz_xyz[..., self._geom_to_link_idx, :])
+        return self.coll.transform(Ts_per_geom)
 
     def get_link_collision_meshes(self) -> dict[str, trimesh.Trimesh]:
         """Get collision meshes for each link in their local coordinate frames.
@@ -398,34 +388,24 @@ class RobotCollision:
         """
         result: dict[str, trimesh.Trimesh] = {}
 
-        if isinstance(self.coll, Capsule):
-            # Capsule mode: one geometry per link
-            for i, link_name in enumerate(self.link_names):
-                mesh = self.coll._create_one_mesh((i,))
-                result[link_name] = mesh
-        elif isinstance(self.coll, Sphere):
-            # Sphere mode: group flat spheres by link using _sphere_link_indices
-            assert self._sphere_link_indices is not None
-            num_geoms = len(self._sphere_link_indices)
+        num_geoms = len(self._geom_to_link_idx)
 
-            # Group sphere indices by link
-            link_to_geom_indices: dict[int, list[int]] = {
-                i: [] for i in range(self.num_links)
-            }
-            for geom_idx in range(num_geoms):
-                link_idx = int(self._sphere_link_indices[geom_idx])
-                link_to_geom_indices[link_idx].append(geom_idx)
+        # Group geometry indices by link
+        link_to_geom_indices: dict[int, list[int]] = {
+            i: [] for i in range(self.num_links)
+        }
+        for geom_idx in range(num_geoms):
+            link_idx = int(self._geom_to_link_idx[geom_idx])
+            link_to_geom_indices[link_idx].append(geom_idx)
 
-            for i, link_name in enumerate(self.link_names):
-                geom_indices = link_to_geom_indices[i]
-                if len(geom_indices) == 0:
-                    mesh = trimesh.Trimesh()
-                else:
-                    meshes = [self.coll._create_one_mesh((j,)) for j in geom_indices]
-                    mesh = cast(trimesh.Trimesh, trimesh.util.concatenate(meshes))
-                result[link_name] = mesh
-        else:
-            raise TypeError(f"Unsupported collision geometry type: {type(self.coll)}")
+        for i, link_name in enumerate(self.link_names):
+            geom_indices = link_to_geom_indices[i]
+            if len(geom_indices) == 0:
+                mesh = trimesh.Trimesh()
+            else:
+                meshes = [self.coll._create_one_mesh((j,)) for j in geom_indices]
+                mesh = cast(trimesh.Trimesh, trimesh.util.concatenate(meshes))
+            result[link_name] = mesh
 
         return result
 
@@ -525,8 +505,8 @@ class RobotCollision:
         self,
         robot: Robot,
         cfg: Float[Array, "*batch_cfg actuated_count"],
-        world_geom: CollGeom,  # Shape: (*batch_world, M, ...)
-    ) -> Float[Array, "*batch_combined num_geoms M"]:
+        world_geom: CollGeom,  # Shape: (*batch_world, num_world, ...)
+    ) -> Float[Array, "*batch_combined num_geoms num_world"]:
         """
         Computes the signed distances between all robot geometries and all world obstacles.
 
@@ -535,13 +515,13 @@ class RobotCollision:
             cfg: The robot configuration (actuated joints).
             world_geom: Collision geometry representing world obstacles. If representing a
                 single obstacle, it should have batch shape (). If multiple, the last axis
-                is interpreted as the collection of world objects (M).
+                is interpreted as the collection of world objects (num_world).
                 The batch dimensions (*batch_world) must be broadcast-compatible with cfg's
                 batch axes (*batch_cfg).
 
         Returns:
             Matrix of signed distances between each robot geometry and each world object.
-            Shape: (*batch_combined, num_geoms, M), where num_geoms is the number of
+            Shape: (*batch_combined, num_geoms, num_world), where num_geoms is the number of
             collision geometries (num_links for capsule mode, total spheres for sphere mode).
             Positive distance means separation, negative means penetration.
         """
@@ -552,7 +532,7 @@ class RobotCollision:
         num_geoms = coll_robot_world.get_batch_axes()[-1]
         batch_cfg_shape = coll_robot_world.get_batch_axes()[:-1]
 
-        # Normalize world_geom shape and determine M
+        # Normalize world_geom shape and determine num_world
         world_axes = world_geom.get_batch_axes()
         if len(world_axes) == 0:  # Single world object
             _world_geom = world_geom.broadcast_to((1,))
