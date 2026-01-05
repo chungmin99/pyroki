@@ -104,6 +104,10 @@ def _solve_ik_with_collision_jax(
     sol = (
         jaxls.LeastSquaresProblem(costs=costs, variables=variables)
         .analyze()
-        .solve(verbose=False, linear_solver="dense_cholesky")
+        .solve(
+            verbose=False,
+            linear_solver="dense_cholesky",
+            termination=jaxls.TerminationConfig(max_iterations=50),
+        )
     )
     return sol[joint_var]
