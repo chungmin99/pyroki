@@ -37,8 +37,6 @@ class RobotCollision:
     """Second index of active self-collision pairs (link indices for capsule, geometry indices for sphere)."""
 
     # Fields for sphere-based collision
-    _is_sphere_mode: jdc.Static[bool] = False
-    """Whether this collision model uses sphere decomposition (True) or capsules (False)."""
     _sphere_link_indices: Int[Array, " num_geoms"] | None = None
     """Maps each sphere to its parent link index (for FK transform lookup). None for capsule mode."""
 
@@ -197,7 +195,6 @@ class RobotCollision:
             coll=spheres,
             active_idx_i=active_idx_i,
             active_idx_j=active_idx_j,
-            _is_sphere_mode=True,
             _sphere_link_indices=jnp.array(sphere_link_indices, dtype=jnp.int32),
         )
 
@@ -228,9 +225,9 @@ class RobotCollision:
         num_links = len(link_names)
         link_name_to_idx = {name: i for i, name in enumerate(link_names)}
 
-        # Build ignore matrix
-        ignore_matrix = onp.zeros((num_links, num_links), dtype=bool)
-        onp.fill_diagonal(ignore_matrix, True)
+        # Build ignore set with normalized pairs (smaller index first).
+        # Self-collision pairs not needed since loop uses li < lj.
+        ignore_set: set[tuple[int, int]] = set()
 
         if ignore_immediate_adjacents and urdf is not None:
             for joint in urdf.joint_map.values():
@@ -239,41 +236,36 @@ class RobotCollision:
                 if parent_name in link_name_to_idx and child_name in link_name_to_idx:
                     parent_idx = link_name_to_idx[parent_name]
                     child_idx = link_name_to_idx[child_name]
-                    ignore_matrix[parent_idx, child_idx] = True
-                    ignore_matrix[child_idx, parent_idx] = True
+                    ignore_set.add(
+                        (min(parent_idx, child_idx), max(parent_idx, child_idx))
+                    )
 
         for name1, name2 in user_ignore_pairs:
             if name1 in link_name_to_idx and name2 in link_name_to_idx:
                 idx1 = link_name_to_idx[name1]
                 idx2 = link_name_to_idx[name2]
-                ignore_matrix[idx1, idx2] = True
-                ignore_matrix[idx2, idx1] = True
+                ignore_set.add((min(idx1, idx2), max(idx1, idx2)))
 
-        # Link-level indices (capsule mode)
+        # Treat capsule mode as 1 geometry per link.
         if geom_counts is None:
-            idx_i, idx_j = onp.tril_indices(num_links, k=-1)
-            should_check = ~ignore_matrix[idx_i, idx_j]
-            active_i = idx_i[should_check]
-            active_j = idx_j[should_check]
-            return (tuple(active_i.tolist()), tuple(active_j.tolist()))
+            geom_counts = onp.ones(num_links, dtype=onp.int32)
 
-        # Geometry-level indices (sphere mode)
         geom_offsets = onp.zeros(num_links + 1, dtype=onp.int32)
         geom_offsets[1:] = onp.cumsum(geom_counts)
 
-        flat_idx_i: list[int] = []
-        flat_idx_j: list[int] = []
+        idx_i: list[int] = []
+        idx_j: list[int] = []
 
         for li in range(num_links):
             for lj in range(li + 1, num_links):
-                if ignore_matrix[li, lj]:
+                if (li, lj) in ignore_set:
                     continue
                 for gi in range(geom_counts[li]):
                     for gj in range(geom_counts[lj]):
-                        flat_idx_i.append(int(geom_offsets[li] + gi))
-                        flat_idx_j.append(int(geom_offsets[lj] + gj))
+                        idx_i.append(int(geom_offsets[li] + gi))
+                        idx_j.append(int(geom_offsets[lj] + gj))
 
-        return (tuple(flat_idx_i), tuple(flat_idx_j))
+        return (tuple(idx_i), tuple(idx_j))
 
     @staticmethod
     def _get_trimesh_collision_geometries(
@@ -383,10 +375,10 @@ class RobotCollision:
         Ts_link_world_wxyz_xyz = robot.forward_kinematics(cfg)
         Ts_link_world = jaxlie.SE3(Ts_link_world_wxyz_xyz)
 
-        if not self._is_sphere_mode:
+        if isinstance(self.coll, Capsule):
             # Capsule path: coll shape (num_links,)
             return self.coll.transform(Ts_link_world)
-        else:
+        elif isinstance(self.coll, Sphere):
             # Sphere path: coll shape (num_geoms,)
             # Index FK by link for each sphere using _sphere_link_indices
             assert self._sphere_link_indices is not None
@@ -394,6 +386,8 @@ class RobotCollision:
                 Ts_link_world.wxyz_xyz[..., self._sphere_link_indices, :]
             )
             return self.coll.transform(Ts_per_sphere)
+        else:
+            raise TypeError(f"Unsupported collision geometry type: {type(self.coll)}")
 
     def get_link_collision_meshes(self) -> dict[str, trimesh.Trimesh]:
         """Get collision meshes for each link in their local coordinate frames.
@@ -404,12 +398,12 @@ class RobotCollision:
         """
         result: dict[str, trimesh.Trimesh] = {}
 
-        if not self._is_sphere_mode:
+        if isinstance(self.coll, Capsule):
             # Capsule mode: one geometry per link
             for i, link_name in enumerate(self.link_names):
                 mesh = self.coll._create_one_mesh((i,))
                 result[link_name] = mesh
-        else:
+        elif isinstance(self.coll, Sphere):
             # Sphere mode: group flat spheres by link using _sphere_link_indices
             assert self._sphere_link_indices is not None
             num_geoms = len(self._sphere_link_indices)
@@ -430,6 +424,8 @@ class RobotCollision:
                     meshes = [self.coll._create_one_mesh((j,)) for j in geom_indices]
                     mesh = cast(trimesh.Trimesh, trimesh.util.concatenate(meshes))
                 result[link_name] = mesh
+        else:
+            raise TypeError(f"Unsupported collision geometry type: {type(self.coll)}")
 
         return result
 
@@ -552,17 +548,8 @@ class RobotCollision:
         # Get robot collision geometry at the current config
         coll_robot_world = self.at_config(robot, cfg)
 
-        # Determine num_geoms based on mode
-        if not self._is_sphere_mode:
-            num_geoms = self.num_links
-        else:
-            num_geoms = (
-                len(self._sphere_link_indices)
-                if self._sphere_link_indices is not None
-                else 0
-            )
-
-        assert coll_robot_world.get_batch_axes()[-1] == num_geoms
+        # Derive num_geoms from collision geometry batch axes
+        num_geoms = coll_robot_world.get_batch_axes()[-1]
         batch_cfg_shape = coll_robot_world.get_batch_axes()[:-1]
 
         # Normalize world_geom shape and determine M
