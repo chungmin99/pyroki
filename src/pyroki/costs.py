@@ -25,7 +25,6 @@ from ._residuals import (
 )
 from ._residuals._pose_residual_analytic_jac import (
     pose_cost_analytic_jac as pose_cost_analytic_jac,
-    pose_cost_analytic_jac_masked as pose_cost_analytic_jac_masked,
 )
 from ._residuals._pose_residual_numerical_jac import (
     pose_cost_numerical_jac as pose_cost_numerical_jac,
