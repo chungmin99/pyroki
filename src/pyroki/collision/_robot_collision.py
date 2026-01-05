@@ -120,7 +120,7 @@ class RobotCollision:
 
     @staticmethod
     def from_sphere_decomposition(
-        sphere_decomposition: dict[str, list[dict]],
+        sphere_decomposition: dict[str, dict],
         link_names: tuple[str, ...],
         urdf: yourdfpy.URDF | None = None,
         user_ignore_pairs: tuple[tuple[str, str], ...] = (),
@@ -130,8 +130,8 @@ class RobotCollision:
         Build a RobotCollision model from sphere decomposition data.
 
         Args:
-            sphere_decomposition: Dict mapping link names to lists of sphere specs.
-                Format: {'link_name': [{'center': [x,y,z], 'radius': r}, ...], ...}
+            sphere_decomposition: Dict mapping link names to sphere specs.
+                Format: {'link_name': {'centers': [[x,y,z], ...], 'radii': [r, ...]}, ...}
                 Links not in this dict will have no collision geometry (empty).
             link_names: Ordered tuple of link names matching Robot.links.names.
             urdf: Optional URDF for computing ignore pairs from adjacency.
@@ -148,8 +148,8 @@ class RobotCollision:
         # Compute geometry counts and max_geoms_per_link
         geom_counts_list: list[int] = []
         for link_name in link_names:
-            spheres = sphere_decomposition.get(link_name, [])
-            geom_counts_list.append(len(spheres))
+            link_data = sphere_decomposition.get(link_name, {"centers": [], "radii": []})
+            geom_counts_list.append(len(link_data.get("centers", [])))
 
         max_geoms = max(geom_counts_list) if geom_counts_list else 1
         max_geoms = max(max_geoms, 1)  # At least 1 to avoid zero-size arrays
@@ -160,13 +160,15 @@ class RobotCollision:
         all_radii: list[list[float]] = []
 
         for link_name in link_names:
-            spheres = sphere_decomposition.get(link_name, [])
+            link_data = sphere_decomposition.get(link_name, {"centers": [], "radii": []})
             link_centers: list[list[float]] = []
             link_radii: list[float] = []
 
-            for s in spheres:
-                link_centers.append(list(s["center"]))
-                link_radii.append(float(s["radius"]))
+            for center, radius in zip(
+                link_data.get("centers", []), link_data.get("radii", [])
+            ):
+                link_centers.append(list(center))
+                link_radii.append(float(radius))
 
             # Pad with zero-radius spheres at origin
             while len(link_centers) < max_geoms:
@@ -496,6 +498,29 @@ class RobotCollision:
                 )
             )
             return self.coll.transform(Ts_expanded)
+
+    def get_link_collision_meshes(self) -> dict[str, trimesh.Trimesh]:
+        """Get collision meshes for each link in their local coordinate frames.
+
+        Returns a dict mapping link_name -> trimesh in local link frame.
+        The meshes are NOT transformed to world frame - useful for attaching
+        to viser frames that are already positioned by ViserUrdf.update_cfg().
+        """
+        result: dict[str, trimesh.Trimesh] = {}
+        for i, link_name in enumerate(self.link_names):
+            if self.geom_counts is None:
+                # Capsule mode: one geometry per link
+                mesh = self.coll._create_one_mesh((i,))
+            else:
+                # Sphere mode: multiple geometries per link
+                count = int(self.geom_counts[i])
+                if count == 0:
+                    mesh = trimesh.Trimesh()
+                else:
+                    meshes = [self.coll._create_one_mesh((i, j)) for j in range(count)]
+                    mesh = cast(trimesh.Trimesh, trimesh.util.concatenate(meshes))
+            result[link_name] = mesh
+        return result
 
     def get_swept_capsules(
         self,
