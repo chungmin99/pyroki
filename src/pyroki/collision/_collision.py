@@ -59,7 +59,9 @@ def _get_coll_func(
 
 
 def collide(geom1: CollGeom, geom2: CollGeom) -> Float[Array, "*batch"]:
-    """Calculate collision distance between two geometric objects, handling broadcasting."""
+    """Calculate collision distance between two geometric objects, handling broadcasting.
+    Positive distance means separation, negative means penetration.
+    """
     try:
         broadcast_shape = jnp.broadcast_shapes(
             geom1.get_batch_axes(), geom2.get_batch_axes()
