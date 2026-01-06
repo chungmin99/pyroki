@@ -418,9 +418,12 @@ class RobotCollision:
         """
         Computes swept-volume capsules between two configurations.
 
-        For each link, the capsule at cfg_prev and cfg_next is decomposed into
-        a fixed number of spheres (currently 5). Corresponding sphere pairs are
-        then connected by capsules to represent the swept volume.
+        For Capsule mode: Each capsule is decomposed into 5 spheres along its
+        axis. Corresponding sphere pairs are connected by capsules.
+        Returns shape: (5, *batch, num_links)
+
+        For Sphere mode: Each sphere's position at cfg_prev is connected to its
+        position at cfg_next by a capsule. Returns shape: (*batch, num_geoms)
 
         Args:
             robot: The Robot instance.
@@ -429,41 +432,31 @@ class RobotCollision:
 
         Returns:
             A Capsule object representing the swept volumes.
-            The batch axes will be (*batch, 5, num_links).
         """
-        n_segments = 5
-
-        # 1. Get collision geometries at start and end configurations
-        # Shape: (*batch, num_links)
-        coll_prev_world: Capsule = cast(Capsule, self.at_config(robot, cfg_prev))
-        coll_next_world: Capsule = cast(Capsule, self.at_config(robot, cfg_next))
-        assert isinstance(coll_prev_world, Capsule)
-        assert isinstance(coll_next_world, Capsule)
+        coll_prev_world = self.at_config(robot, cfg_prev)
+        coll_next_world = self.at_config(robot, cfg_next)
         assert coll_prev_world.get_batch_axes() == coll_next_world.get_batch_axes()
 
-        # 2. Decompose capsules into spheres
-        # Shape: (n_segments, *batch, num_links)
-        spheres_prev = coll_prev_world.decompose_to_spheres(n_segments)
-        spheres_next = coll_next_world.decompose_to_spheres(n_segments)
-        assert spheres_prev.get_batch_axes() == spheres_next.get_batch_axes(), (
-            "Sphere batch axes mismatch after decomposition."
-        )
-        expected_sphere_batch_axes = (
-            (n_segments,) + cfg_prev.shape[:-1] + (self.num_links,)
-        )
-        assert spheres_prev.get_batch_axes() == expected_sphere_batch_axes, (
-            f"Unexpected sphere batch axes: {spheres_prev.get_batch_axes()} vs {expected_sphere_batch_axes}"
-        )
+        if isinstance(coll_prev_world, Capsule):
+            assert isinstance(coll_next_world, Capsule)
+            n_segments = 5
+            spheres_prev = coll_prev_world.decompose_to_spheres(n_segments)
+            spheres_next = coll_next_world.decompose_to_spheres(n_segments)
+            assert spheres_prev.get_batch_axes() == spheres_next.get_batch_axes()
+            expected_batch = (n_segments,) + cfg_prev.shape[:-1] + (self.num_links,)
+            assert spheres_prev.get_batch_axes() == expected_batch
+            swept_capsules = Capsule.from_sphere_pairs(spheres_prev, spheres_next)
+            assert swept_capsules.get_batch_axes() == expected_batch
+            return swept_capsules
 
-        # 3. Create swept capsules by connecting corresponding sphere pairs
-        # Shape: (n_segments, *batch, num_links)
-        swept_capsules = Capsule.from_sphere_pairs(spheres_prev, spheres_next)
-        assert swept_capsules.get_batch_axes() == expected_sphere_batch_axes, (
-            "Swept capsule batch axes mismatch."
-        )
+        elif isinstance(coll_prev_world, Sphere):
+            assert isinstance(coll_next_world, Sphere)
+            return Capsule.from_sphere_pairs(coll_prev_world, coll_next_world)
 
-        # The result contains capsules for each segment of each link.
-        return swept_capsules
+        else:
+            raise TypeError(
+                f"Unsupported collision geometry type: {type(coll_prev_world)}"
+            )
 
     def compute_self_collision_distance(
         self,

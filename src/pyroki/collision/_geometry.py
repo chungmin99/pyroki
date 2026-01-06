@@ -57,9 +57,13 @@ class CollGeom(abc.ABC):
 
     def transform(self, transform: jaxlie.SE3) -> Self:
         """Left-multiples geometry's pose with an SE(3) transformation."""
-        with jdc.copy_and_mutate(self) as out:
-            out.pose = transform @ self.pose
-        return out.broadcast_to(out.pose.get_batch_axes())
+        broadcasted_axes = jnp.broadcast_shapes(
+            self.pose.get_batch_axes(), transform.get_batch_axes()
+        )
+        _self = self.broadcast_to(broadcasted_axes)
+        with jdc.copy_and_mutate(_self) as out:
+            out.pose = transform @ _self.pose
+        return out
 
     def transform_from_wxyz_position(
         self,
