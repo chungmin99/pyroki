@@ -20,6 +20,7 @@ def solve_ik_with_base(
 ) -> tuple[onp.ndarray, onp.ndarray, onp.ndarray]:
     """
     Solves the basic IK problem for a robot with a mobile base.
+    Weights are tuned for the Fetch mobile robot.
 
     Args:
         robot: PyRoKi Robot.
