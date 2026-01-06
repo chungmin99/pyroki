@@ -127,9 +127,11 @@ def rest_with_base_residual(
     rest_pose: Array,
     weight: Array | float = 1.0,
 ) -> Array:
-    """Computes the residual biasing joints and base towards rest/identity."""
+    """Computes the residual biasing joints and base towards its default pose."""
     residual_joints = vals[joint_var] - rest_pose
-    residual_base = vals[T_world_base_var].log()
+    residual_base = (
+        vals[T_world_base_var].inverse() @ T_world_base_var.default_factory()
+    ).log()
     return (jnp.concatenate([residual_joints, residual_base]) * weight).flatten()
 
 

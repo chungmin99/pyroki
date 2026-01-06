@@ -104,11 +104,13 @@ def _solve_ik_jax(
         pk.costs.rest_with_base_cost(
             joint_var,
             base_var,
-            jnp.array(joint_var.default_factory()),
+            jnp.array(prev_cfg),
             jnp.array(
-                [0.01] * robot.joints.num_actuated_joints
-                + [0.1] * 3  # Base position DoF.
-                + [0.001] * 3,  # Base orientation DoF.
+                [0.1] * 2
+                + [2.0]  # fetch torso_lift is at index 2; regularize it like base DoF.
+                + [0.1] * (robot.joints.num_actuated_joints - 3)
+                + [2.0] * 3  # Base position DoF.
+                + [0.5] * 3,  # Base orientation DoF.
             ),
         ),
     ]
