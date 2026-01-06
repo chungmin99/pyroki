@@ -8,6 +8,8 @@ Usage:
     python tests/viz_collision_sweep.py
 """
 
+from typing import Literal
+
 import json
 import time
 from pathlib import Path
@@ -19,6 +21,7 @@ import jaxlie
 import jaxls
 import numpy as np
 import pyroki as pk
+import tyro
 import viser
 from pyroki.collision import RobotCollision
 from robot_descriptions.loaders.yourdfpy import load_robot_description
@@ -88,16 +91,25 @@ def solve_ik(
 # -------------------------------------------------------------------
 
 
-def main():
+def main(robot_name: Literal["ur5", "panda"] = "panda"):
     """Main function for collision sweep visualization."""
     # Load robot and collision models.
-    urdf = load_robot_description("ur5_description")
+    urdf = load_robot_description(f"{robot_name}_description")
     robot = pk.Robot.from_urdf(urdf)
-    target_link_name = "ee_link"
+
+    if robot_name == "ur5":
+        target_link_name = "ee_link"
+    elif robot_name == "panda":
+        target_link_name = "panda_hand"
+    else:
+        raise ValueError(f"Unsupported robot name: {robot_name}")
 
     # Load sphere decomposition from JSON.
     sphere_json_path = (
-        Path(__file__).parent.parent / "examples" / "assets" / "ur5_spheres.json"
+        Path(__file__).parent.parent
+        / "examples"
+        / "assets"
+        / f"{robot_name}_spheres.json"
     )
     with open(sphere_json_path, "r") as f:
         sphere_decomposition = json.load(f)
@@ -260,4 +272,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    tyro.cli(main)
