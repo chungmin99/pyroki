@@ -5,7 +5,9 @@ Basic Trajectory Optimization using PyRoKi.
 Robot going over a wall, while avoiding world-collisions.
 """
 
+import json
 import time
+from pathlib import Path
 from typing import Literal
 
 import numpy as np
@@ -24,6 +26,7 @@ def main(robot_name: Literal["ur5", "panda"] = "panda"):
         urdf = load_robot_description("ur5_description")
         down_wxyz = np.array([0.707, 0, 0.707, 0])
         target_link_name = "ee_link"
+        sphere_json_path = Path(__file__).parent / "assets" / "ur5_spheres.json"
 
         # For UR5 it's important to initialize the robot in a safe configuration;
         # the zero-configuration puts the robot aligned with the wall obstacle.
@@ -35,24 +38,30 @@ def main(robot_name: Literal["ur5", "panda"] = "panda"):
         urdf = load_robot_description("panda_description")
         target_link_name = "panda_hand"
         down_wxyz = np.array([0, 0, 1, 0])  # for panda!
+        sphere_json_path = Path(__file__).parent / "assets" / "panda_spheres.json"
         robot = pk.Robot.from_urdf(urdf)
 
     else:
         raise ValueError(f"Invalid robot: {robot_name}")
 
-    robot_coll = pk.collision.RobotCollision.from_urdf(urdf)
+    with open(sphere_json_path, "r") as f:
+        sphere_decomposition = json.load(f)
+    robot_coll = pk.collision.RobotCollision.from_sphere_decomposition(
+        sphere_decomposition=sphere_decomposition,
+        urdf=urdf,
+    )
 
     # Define the trajectory problem:
     # - number of timesteps, timestep size
     timesteps, dt = 50, 0.02
     # - the start and end poses.
-    start_pos, end_pos = np.array([0.5, -0.3, 0.2]), np.array([0.5, 0.3, 0.2])
+    start_pos, end_pos = np.array([0.5, -0.35, 0.2]), np.array([0.5, 0.35, 0.2])
 
     # Define the obstacles:
     # - Ground
-    # ground_coll = pk.collision.HalfSpace.from_point_and_normal(
-    #     np.array([0.0, 0.0, 0.0]), np.array([0.0, 0.0, 1.0])
-    # )
+    ground_coll = pk.collision.HalfSpace.from_point_and_normal(
+        np.array([0.0, 0.0, 0.0]), np.array([0.0, 0.0, 1.0])
+    )
     # - Wall (using Box collision geometry)
     wall_height = 0.4
     wall_width = 0.1
@@ -61,12 +70,7 @@ def main(robot_name: Literal["ur5", "panda"] = "panda"):
         extent=np.array([wall_length, wall_width, wall_height]),
         position=np.array([0.5, 0.0, wall_height / 2]),
     )
-    # world_coll = [ground_coll, wall_coll]
-
-    # TODO: Constraints don't work with ground collision at the moment,
-    # because the robot is in collision already with it (which destabilizes things).
-    # We will fix this when we can have better robot collision geometries / handling in the future.
-    world_coll = [wall_coll]
+    world_coll = [ground_coll, wall_coll]
 
     traj = pks.solve_trajopt(
         robot,
