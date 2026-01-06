@@ -91,13 +91,13 @@ def solve_ik(
 def main():
     """Main function for collision sweep visualization."""
     # Load robot and collision models.
-    urdf = load_robot_description("panda_description")
+    urdf = load_robot_description("ur5_description")
     robot = pk.Robot.from_urdf(urdf)
-    target_link_name = "panda_hand"
+    target_link_name = "ee_link"
 
     # Load sphere decomposition from JSON.
     sphere_json_path = (
-        Path(__file__).parent.parent / "examples" / "assets" / "panda_spheres.json"
+        Path(__file__).parent.parent / "examples" / "assets" / "ur5_spheres.json"
     )
     with open(sphere_json_path, "r") as f:
         sphere_decomposition = json.load(f)
