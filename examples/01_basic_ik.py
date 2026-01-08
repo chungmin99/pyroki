@@ -18,6 +18,12 @@ def main():
     """Main function for basic IK."""
 
     urdf = load_robot_description("panda_description")
+    # --- Alternative: Load a custom URDF file ---
+    # import yourdfpy
+    # from pathlib import Path
+    # urdf_path = Path("path/to/your/robot.urdf")
+    # urdf = yourdfpy.URDF.load(urdf_path)
+    # --------------------------------------------
     target_link_name = "panda_hand"
 
     # Create robot.
