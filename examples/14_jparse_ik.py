@@ -54,13 +54,20 @@ def main():
         gamma_handle = server.gui.add_slider(
             "Gamma (singularity threshold)", 0.01, 0.5, 0.01, 0.1
         )
-        singular_gain_handle = server.gui.add_slider(
-            "Singular direction gain", 0.5, 5.0, 0.1, 2.0
+        singular_gain_position_handle = server.gui.add_slider(
+            "Singular gain (position)", 0.5, 5.0, 0.1, 2.0
+        )
+        singular_gain_angular_handle = server.gui.add_slider(
+            "Singular gain (angular)", 0.5, 5.0, 0.1, 2.0
         )
 
     with server.gui.add_folder("Control"):
+        track_orientation_handle = server.gui.add_checkbox("Track orientation", True)
         position_gain_handle = server.gui.add_slider(
             "Position gain", 1.0, 20.0, 0.5, 5.0
+        )
+        orientation_gain_handle = server.gui.add_slider(
+            "Orientation gain", 0.1, 5.0, 0.1, 1.0
         )
         nullspace_gain_handle = server.gui.add_slider(
             "Nullspace gain", 0.0, 2.0, 0.05, 0.5
@@ -83,6 +90,9 @@ def main():
         pos_error_handle = server.gui.add_number(
             "Position error (m)", 0.0, disabled=True
         )
+        ori_error_handle = server.gui.add_number(
+            "Orientation error (rad)", 0.0, disabled=True
+        )
         singularity_handle = server.gui.add_text(
             "Singularity status", "", disabled=True
         )
@@ -100,15 +110,21 @@ def main():
         start_time = time.time()
 
         # Take one velocity IK step.
+        target_wxyz = (
+            np.array(ik_target.wxyz) if track_orientation_handle.value else None
+        )
         cfg, info = jparse_step(
             robot=robot,
             cfg=cfg,
             target_link_index=target_link_index,
             target_position=np.array(ik_target.position),
+            target_wxyz=target_wxyz,
             method=method_handle.value,  # type: ignore
             gamma=gamma_handle.value,
-            singular_direction_gain=singular_gain_handle.value,
+            singular_direction_gain_position=singular_gain_position_handle.value,
+            singular_direction_gain_angular=singular_gain_angular_handle.value,
             position_gain=position_gain_handle.value,
+            orientation_gain=orientation_gain_handle.value,
             nullspace_gain=nullspace_gain_handle.value,
             max_joint_velocity=max_vel_handle.value,
             dt=0.02,
@@ -119,6 +135,7 @@ def main():
         condition_handle.value = round(info["inverse_condition_number"], 4)
         max_vel_display.value = round(info["max_joint_vel"], 3)
         pos_error_handle.value = round(info["position_error"], 4)
+        ori_error_handle.value = round(info["orientation_error"], 4)
 
         # Singularity warning.
         icn = info["inverse_condition_number"]

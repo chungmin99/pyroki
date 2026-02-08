@@ -93,14 +93,47 @@ class TestSingularDirectionGains:
     def test_finite_output_with_gain(self):
         """Finite output with specified singular direction gain."""
         J = np.array([[1.0, 1.0], [1.0, 1.001]])
-        J_parse, _ = jparse_pseudoinverse(J, gamma=0.1, singular_direction_gain=2.0)
+        J_parse, _ = jparse_pseudoinverse(
+            J,
+            gamma=0.1,
+            singular_direction_gain_position=2.0,
+        )
         assert np.all(np.isfinite(J_parse))
 
     def test_gain_affects_output(self):
         """Different gains produce different results for near-singular case."""
         J = np.array([[1.0, 1.0], [1.0, 1.001]])
-        J1, _ = jparse_pseudoinverse(J, gamma=0.1, singular_direction_gain=1.0)
-        J2, _ = jparse_pseudoinverse(J, gamma=0.1, singular_direction_gain=3.0)
+        J1, _ = jparse_pseudoinverse(
+            J,
+            gamma=0.1,
+            singular_direction_gain_position=1.0,
+        )
+        J2, _ = jparse_pseudoinverse(
+            J,
+            gamma=0.1,
+            singular_direction_gain_position=3.0,
+        )
+        assert not np.allclose(J1, J2)
+
+    def test_angular_gain_affects_6dof_output(self):
+        """Angular gain changes output when angular directions are singular."""
+        J = np.diag([1.0, 1.0, 1.0, 1.0, 1.0, 1e-4])
+        J1, _ = jparse_pseudoinverse(
+            J,
+            gamma=0.1,
+            singular_direction_gain_position=1.0,
+            singular_direction_gain_angular=1.0,
+            position_dimensions=3,
+            angular_dimensions=3,
+        )
+        J2, _ = jparse_pseudoinverse(
+            J,
+            gamma=0.1,
+            singular_direction_gain_position=1.0,
+            singular_direction_gain_angular=3.0,
+            position_dimensions=3,
+            angular_dimensions=3,
+        )
         assert not np.allclose(J1, J2)
 
 
@@ -180,6 +213,24 @@ class TestEdgeCases:
         J_parse, _ = jparse_pseudoinverse(J, gamma=0.99)
         assert np.all(np.isfinite(J_parse))
 
+    def test_missing_dimension_argument_raises(self):
+        """Providing only one dimension argument raises ValueError."""
+        J = np.eye(6)
+        with pytest.raises(
+            ValueError,
+            match="Both position_dimensions and angular_dimensions must be provided.",
+        ):
+            jparse_pseudoinverse(J, position_dimensions=3)
+
+    def test_dimension_sum_mismatch_raises(self):
+        """Dimension sum must match Jacobian row count."""
+        J = np.eye(6)
+        with pytest.raises(
+            ValueError,
+            match="position_dimensions \\+ angular_dimensions must equal Jacobian row count.",
+        ):
+            jparse_pseudoinverse(J, position_dimensions=2, angular_dimensions=3)
+
 
 class TestFeatureParity:
     """Cross-validate JAX implementation against original jparse_robotics."""
@@ -209,7 +260,15 @@ class TestFeatureParity:
 
         for name, J in test_jacobians.items():
             J_np = core.compute(J)
-            J_jax, _ = jparse_pseudoinverse(J, gamma=gamma)
+            row_count = J.shape[0]
+            J_jax, _ = jparse_pseudoinverse(
+                J,
+                gamma=gamma,
+                singular_direction_gain_position=1.0,
+                singular_direction_gain_angular=1.0,
+                position_dimensions=3 if row_count == 6 else row_count,
+                angular_dimensions=3 if row_count == 6 else 0,
+            )
             np.testing.assert_allclose(
                 np.array(J_jax), np.array(J_np), atol=1e-5, err_msg=f"Failed for {name}"
             )
@@ -319,9 +378,87 @@ class TestIntegration:
         )
         expected_keys = {
             "position_error",
+            "orientation_error",
             "max_joint_vel",
             "jacobian",
             "manipulability",
             "inverse_condition_number",
         }
         assert set(info.keys()) == expected_keys
+
+    def test_orientation_tracking(self, panda_robot):
+        """Orientation tracking uses 6-DOF Jacobian and reduces error."""
+        import jaxlie
+
+        robot, target_link_index = panda_robot
+        cfg = np.array((robot.joints.lower_limits + robot.joints.upper_limits) / 2.0)
+
+        # Use a small orientation offset from the initial EE pose so
+        # the controller can converge in limited steps.
+        import jax.numpy as jnp
+
+        poses = robot.forward_kinematics(jnp.asarray(cfg))
+        init_pose = jaxlie.SE3(poses[target_link_index])
+        target_pos = np.array(init_pose.translation()) + np.array([0.05, 0.0, 0.0])
+        target_wxyz = np.array(init_pose.rotation().wxyz)
+
+        errors = []
+        for _ in range(100):
+            cfg, info = jparse_step(
+                robot=robot,
+                cfg=cfg,
+                target_link_index=target_link_index,
+                target_position=target_pos,
+                target_wxyz=target_wxyz,
+                gamma=0.1,
+                dt=0.02,
+            )
+            errors.append(info["position_error"])
+
+        # Position error should decrease.
+        assert errors[-1] < errors[0]
+        # Jacobian should be 6xn when tracking orientation.
+        assert info["jacobian"].shape[0] == 6
+        # Orientation error should be present and finite.
+        assert np.isfinite(info["orientation_error"])
+
+    def test_orientation_convergence_large_rotation(self, panda_robot):
+        """Orientation converges with a non-trivial (~45 deg) rotation offset.
+
+        This exercises the geometric Jacobian path: the analytical Jacobian
+        introduces artificial singularities at large rotations that prevent
+        convergence, while the geometric Jacobian handles them correctly.
+        """
+        import jax.numpy as jnp
+        import jaxlie
+
+        robot, target_link_index = panda_robot
+        cfg = np.array((robot.joints.lower_limits + robot.joints.upper_limits) / 2.0)
+
+        poses = robot.forward_kinematics(jnp.asarray(cfg))
+        init_pose = jaxlie.SE3(poses[target_link_index])
+
+        # Keep position the same, apply a ~45-degree rotation about the z-axis.
+        target_pos = np.array(init_pose.translation())
+        angle = np.pi / 4  # 45 degrees
+        offset_rot = jaxlie.SO3.from_z_radians(angle)
+        target_rot = offset_rot @ init_pose.rotation()
+        target_wxyz = np.array(target_rot.wxyz)
+
+        ori_errors = []
+        for _ in range(200):
+            cfg, info = jparse_step(
+                robot=robot,
+                cfg=cfg,
+                target_link_index=target_link_index,
+                target_position=target_pos,
+                target_wxyz=target_wxyz,
+                gamma=0.1,
+                dt=0.02,
+            )
+            ori_errors.append(info["orientation_error"])
+
+        # Orientation error should converge to a small value.
+        assert ori_errors[-1] < 0.15, (
+            f"Orientation error did not converge: {ori_errors[-1]:.4f}"
+        )
