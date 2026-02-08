@@ -53,7 +53,7 @@ def compute_jacobian(
         anchor_poses = robot.forward_kinematics(cfg)
         R_anchor_inv = jaxlie.SE3(anchor_poses[target_link_index]).rotation().inverse()
 
-        def get_pose_components(q: ArrayLike) -> jnp.ndarray:
+        def get_pose_components(q: jax.Array) -> jnp.ndarray:
             poses = robot.forward_kinematics(q)
             pose = jaxlie.SE3(poses[target_link_index])
             relative_rotation = pose.rotation() @ R_anchor_inv
@@ -273,30 +273,32 @@ def jparse_step(
     pos_error_mag = float(jnp.linalg.norm(pos_error))
 
     # Build desired task-space velocity.
+    omega_error = jnp.zeros(3)
     if position_only:
         v_des = position_gain * pos_error
     else:
-        target_wxyz = jnp.asarray(target_wxyz)
-        target_wxyz = target_wxyz / jnp.linalg.norm(target_wxyz)
+        assert target_wxyz is not None
+        tw = jnp.asarray(target_wxyz)
+        tw = tw / jnp.linalg.norm(tw)
 
         current_wxyz = target_pose.rotation().wxyz
         current_wxyz = current_wxyz / jnp.linalg.norm(current_wxyz)
 
         # Ensure shortest-path quaternion.
-        target_wxyz = jnp.where(
-            jnp.dot(target_wxyz, current_wxyz) < 0, -target_wxyz, target_wxyz
-        )
+        tw = jnp.asarray(jnp.where(jnp.dot(tw, current_wxyz) < 0, -tw, tw))
 
         # Orientation error via SO3 log map.
         q_current = jaxlie.SO3(current_wxyz)
-        q_target = jaxlie.SO3(target_wxyz)
+        q_target = jaxlie.SO3(tw)
         omega_error = (q_target @ q_current.inverse()).log()
 
         # Clamp orientation error magnitude.
         omega_mag = jnp.linalg.norm(omega_error)
         max_omega = 1.0  # rad
-        omega_error = jnp.where(
-            omega_mag > max_omega, omega_error * max_omega / omega_mag, omega_error
+        omega_error = jnp.asarray(
+            jnp.where(
+                omega_mag > max_omega, omega_error * max_omega / omega_mag, omega_error
+            )
         )
 
         v_des = jnp.concatenate(
