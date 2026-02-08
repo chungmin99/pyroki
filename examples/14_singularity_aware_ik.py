@@ -40,7 +40,9 @@ def main():
         "Gamma (singularity threshold)", 0.01, 0.5, 0.01, 0.1
     )
     nullspace_gain_handle = server.gui.add_slider("Nullspace gain", 0.0, 2.0, 0.05, 0.5)
-    manipulability_handle = server.gui.add_number("Manipulability", 0.001, disabled=True)
+    manipulability_handle = server.gui.add_number(
+        "Manipulability", 0.001, disabled=True
+    )
     show_ellipsoid_handle = server.gui.add_checkbox("Show ellipsoid", True)
 
     # Manipulability ellipsoid visualization.
