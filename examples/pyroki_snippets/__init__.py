@@ -9,3 +9,4 @@ from ._trajopt import solve_trajopt as solve_trajopt
 from ._solve_ik_with_multiple_targets import (
     solve_ik_with_multiple_targets as solve_ik_with_multiple_targets,
 )
+from ._jparse import jparse_step as jparse_step
