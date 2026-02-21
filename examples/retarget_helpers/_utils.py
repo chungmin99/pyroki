@@ -11,30 +11,52 @@ def create_conn_tree(robot: pk.Robot, link_indices: jnp.ndarray) -> jnp.ndarray:
     n = len(link_indices)
     conn_matrix = jnp.zeros((n, n))
 
-    def is_direct_chain_connection(idx1: int, idx2: int) -> bool:
-        """Check if two joints are connected in the kinematic chain without other retargeted joints between"""
-        joint1 = link_indices[idx1]
-        joint2 = link_indices[idx2]
+    # Build parent link index for each link (link_indices are link indices, not joint indices).
+    # For each joint j, find the link that is its child: parent_joint_indices[link_idx] == j.
+    num_links = robot.links.num_links
+    num_joints = robot.joints.num_joints
+    parent_joint = tuple(robot.links.parent_joint_indices)
+    parent_joint_of_joint = tuple(robot.joints.parent_indices)
 
-        # Check path from joint2 up to root
-        current = joint2
+    joint_to_child_link = [None] * num_joints
+    for link_idx in range(num_links):
+        pj = parent_joint[link_idx]
+        if pj >= 0:
+            joint_to_child_link[pj] = link_idx
+
+    def get_parent_link(link_idx: int) -> int:
+        pj = parent_joint[link_idx]
+        if pj < 0:
+            return -1
+        grandparent_joint = parent_joint_of_joint[pj]
+        if grandparent_joint < 0:
+            return -1
+        return joint_to_child_link[grandparent_joint]
+
+    link_indices_set = set(int(i) for i in link_indices)
+
+    def is_direct_chain_connection(idx1: int, idx2: int) -> bool:
+        """Check if two links are connected in the kinematic chain without other retargeted links between."""
+        link1 = int(link_indices[idx1])
+        link2 = int(link_indices[idx2])
+
+        # Check path from link2 up to root
+        current = link2
         while current != -1:
-            parent = robot.joints.parent_indices[current]
-            if parent == joint1:
+            parent = get_parent_link(current)
+            if parent == link1:
                 return True
-            if parent in link_indices:
-                # Hit another retargeted joint before finding joint1
+            if parent in link_indices_set:
                 break
             current = parent
 
-        # Check path from joint1 up to root
-        current = joint1
+        # Check path from link1 up to root
+        current = link1
         while current != -1:
-            parent = robot.joints.parent_indices[current]
-            if parent == joint2:
+            parent = get_parent_link(current)
+            if parent == link2:
                 return True
-            if parent in link_indices:
-                # Hit another retargeted joint before finding joint2
+            if parent in link_indices_set:
                 break
             current = parent
 
