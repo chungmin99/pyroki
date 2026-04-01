@@ -39,6 +39,7 @@ dev = [
     "scikit-sparse",
     "ruff",
     "pytest",
+    "pytest-cov",
     "m2r2",
 ]
 

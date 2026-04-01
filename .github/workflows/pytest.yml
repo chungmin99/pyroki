@@ -25,6 +25,6 @@ jobs:
           sudo apt install -y libsuitesparse-dev
           pip install uv
           uv pip install --system -e ".[dev,examples]"
+          uv add --dev pytest pytest-cov
       - name: Test with pytest
-        run: |
-          pytest
+        run: uv run pytest --cov=pyroki --cov-report=term-missing
