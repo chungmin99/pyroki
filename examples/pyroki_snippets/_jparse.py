@@ -5,7 +5,7 @@ J-PARSE (Jacobian-based Projection Algorithm for Resolving Singularities
 Effectively) provides singularity-aware inverse kinematics by computing a
 modified pseudo-inverse that handles singular configurations smoothly.
 
-Reference: https://github.com/chungmin99/jparse
+Reference: https://github.com/armlabstanford/jparse
 """
 
 from __future__ import annotations
