@@ -62,6 +62,106 @@ class Robot:
 
         return robot
 
+    @staticmethod
+    def from_reduced_urdf(
+        input_urdf_path: str, 
+        preserved_joint_names: list[str], 
+        output_urdf_path: str,
+        default_joint_cfg: Float[ArrayLike, "*batch actuated_count"] | None = None,
+    ) -> Robot:
+        """
+        Create a new URDF file with only preserved_joint_names.
+        Note: This function preserves the root joint as root, and connects preserved_joint_names to the root.
+        
+        Args:
+            input_urdf_path: Path to the original full URDF file.
+            preserved_joint_names: List of joint names to preserve.
+            output_urdf_path: Path to the output reduced URDF file.
+            default_joint_cfg: Joint configuration for the reduced urdf model.
+        
+        Returns:
+            The reduced URDF as a yourdfpy.URDF object.
+        """
+        import os
+        from lxml import etree
+
+        if os.path.exists(output_urdf_path):
+            print(f"Output file {output_urdf_path} already exists.")
+            print(f"Loading existing URDF from {output_urdf_path}.")
+            urdf = yourdfpy.URDF.load(output_urdf_path)
+            print(f"Loaded URDF from {output_urdf_path}: {urdf.__dict__}")
+            return Robot.from_urdf(urdf, default_joint_cfg)
+            
+        # Parse original URDF
+        tree = etree.parse(input_urdf_path)
+        root = tree.getroot()
+        
+        # Load to get joint structure
+        urdf = yourdfpy.URDF.load(input_urdf_path)
+        
+        # Find required elements
+        required_links = set()
+        required_joints = set(preserved_joint_names)
+        
+        for joint_name in preserved_joint_names:
+            if joint_name in urdf.joint_map:
+                joint = urdf.joint_map[joint_name]
+                required_links.add(joint.child)
+                
+                # Traverse to root
+                current = joint.parent
+                while current:
+                    required_links.add(current)
+                    parent_joint = next((j for j in urdf.joint_map.values() if j.child == current), None)
+                    if parent_joint:
+                        required_joints.add(parent_joint.name)
+                        current = parent_joint.parent
+                    else:
+                        break
+        
+        print(f"Required joints: {len(required_joints)}")
+        print(f"Required links: {len(required_links)}")
+        
+        # Remove unwanted elements from XML
+        for joint in list(root.findall('joint')):
+            if joint.get('name') not in required_joints:
+                root.remove(joint)
+        
+        for link in list(root.findall('link')):
+            if link.get('name') not in required_links:
+                root.remove(link)
+        
+        # VALIDATE: Check that all joint parents/children exist
+        for joint_elem in root.findall('joint'):
+            parent_elem = joint_elem.find('parent')
+            child_elem = joint_elem.find('child')
+            
+            parent_link = parent_elem.get('link') if parent_elem is not None else None
+            child_link = child_elem.get('link') if child_elem is not None else None
+            
+            if parent_link and parent_link not in required_links:
+                print(f"WARNING: Joint {joint_elem.get('name')} references missing parent link: {parent_link}")
+            if child_link and child_link not in required_links:
+                print(f"WARNING: Joint {joint_elem.get('name')} references missing child link: {child_link}")
+        
+        # Save filtered URDF with explicit encoding
+        tree.write(output_urdf_path, pretty_print=True, xml_declaration=True, encoding='utf-8')
+        print(f"Saved reduced URDF to {output_urdf_path}")
+        print(f"  Joints: {len(urdf.joint_map)} -> {len(required_joints)}")
+        print(f"  Links: {len(urdf.link_map)} -> {len(required_links)}")
+        
+        # VERIFY: Try loading the reduced URDF with yourdfpy
+        try:
+            reduced_urdf = yourdfpy.URDF.load(output_urdf_path)
+            print(f"✓ Reduced URDF loads successfully with yourdfpy")
+            print(f"  Joints in reduced: {len(reduced_urdf.joint_map)}")
+            print(f"  Links in reduced: {len(reduced_urdf.link_map)}")
+        except Exception as e:
+            print(f"✗ ERROR loading reduced URDF: {e}")
+        else:
+            return Robot.from_urdf(reduced_urdf, default_joint_cfg)
+
+
     @jdc.jit
     def forward_kinematics(
         self,
