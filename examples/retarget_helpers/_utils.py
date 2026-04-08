@@ -99,7 +99,7 @@ SMPL_JOINT_NAMES = [
     "right_pinky",
 ]
 
-# When loaded from `g1_description`s 23-dof model.
+# When loaded from `g1_description` (29-dof model).
 G1_LINK_NAMES = [
     "pelvis",
     "pelvis_contour_link",

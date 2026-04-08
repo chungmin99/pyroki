@@ -1,0 +1,104 @@
+<?xml version="1.0"?>
+<robot name="multi_boxes">
+  <!-- Note: Platform/ground boxes with large coordinates (-10 or 10) have been filtered out -->
+  <link name="world"/>
+  <!-- Box 1 -->
+  <link name="multi_boxes_link">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="box_models/box1.obj" scale="0.7415730337078652 0.7415730337078652 0.7415730337078652"/>
+      </geometry>
+      <material name="box1_material">
+        <color rgba="0.3 0.7 0.9 0.5"/>
+      </material>
+    </visual>
+
+    <collision name="multi_boxes">
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="box_models/box1.obj" scale="0.7415730337078652 0.7415730337078652 0.7415730337078652"/>
+      </geometry>
+    </collision>
+
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="33.33"/>
+      <inertia ixx="33.33" ixy="0.0" ixz="0.0" iyy="33.33" iyz="0.0" izz="33.33"/>
+    </inertial>
+  </link>
+
+  <!-- Box 2 -->
+  <link name="box2_link">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="box_models/box2.obj" scale="0.7415730337078652 0.7415730337078652 0.7415730337078652"/>
+      </geometry>
+      <material name="box2_material">
+        <color rgba="0.7 0.3 0.9 0.5"/>
+      </material>
+    </visual>
+
+    <collision name="box2">
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="box_models/box2.obj" scale="0.7415730337078652 0.7415730337078652 0.7415730337078652"/>
+      </geometry>
+    </collision>
+
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="33.33"/>
+      <inertia ixx="33.33" ixy="0.0" ixz="0.0" iyy="33.33" iyz="0.0" izz="33.33"/>
+    </inertial>
+  </link>
+
+  <!-- Box 3 -->
+  <link name="box3_link">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="box_models/box3.obj" scale="0.7415730337078652 0.7415730337078652 0.7415730337078652"/>
+      </geometry>
+      <material name="box3_material">
+        <color rgba="0.9 0.7 0.3 0.5"/>
+      </material>
+    </visual>
+
+    <collision name="box3">
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="box_models/box3.obj" scale="0.7415730337078652 0.7415730337078652 0.7415730337078652"/>
+      </geometry>
+    </collision>
+
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="33.33"/>
+      <inertia ixx="33.33" ixy="0.0" ixz="0.0" iyy="33.33" iyz="0.0" izz="33.33"/>
+    </inertial>
+  </link>
+
+  <!-- Fixed joint to world for Box 1 -->
+  <joint name="world_to_multi_boxes" type="fixed">
+    <parent link="world"/>
+    <child link="multi_boxes_link"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
+
+  <!-- Fixed joint to world for Box 2 -->
+  <joint name="world_to_box2" type="fixed">
+    <parent link="world"/>
+    <child link="box2_link"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
+
+  <!-- Fixed joint to world for Box 3 -->
+  <joint name="world_to_box3" type="fixed">
+    <parent link="world"/>
+    <child link="box3_link"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
+
+</robot>
