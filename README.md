@@ -32,7 +32,7 @@ Or, to install from source for development:
 ```
 git clone https://github.com/chungmin99/pyroki.git
 cd pyroki
-pip install -e ".[dev]"
+pip install -e ".[dev,examples]"
 ```
 
 ## Status
