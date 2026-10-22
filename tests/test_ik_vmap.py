@@ -6,6 +6,7 @@ import jax_dataclasses as jdc
 import jaxlie
 import jaxls
 import pyroki as pk
+import pytest
 from pyroki.collision import RobotCollision, Capsule
 from robot_descriptions.loaders.yourdfpy import load_robot_description
 
@@ -139,16 +140,9 @@ def test_unit_collision_batching_topology_mismatch():
     )
 
     # 3. Attempting to batch them (e.g. stack) should fail because structures differ.
-    try:
+    # The error message wording varies across JAX versions, so only check the type.
+    with pytest.raises(ValueError):
         jax.tree.map(lambda x, y: jnp.stack([x, y]), rc1, rc2)
-    except ValueError as e:
-        # Expected error: "Mismatch custom node data..."
-        assert "Mismatch custom node data" in str(e)
-        return
-
-    raise AssertionError(
-        "Batching incompatible RobotCollision objects should have failed!"
-    )
 
 
 def test_integration_ik_basic():
