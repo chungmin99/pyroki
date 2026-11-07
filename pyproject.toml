@@ -1,37 +1,47 @@
 [build-system]
-requires = ["setuptools>=61.0"]
+requires = ["setuptools>=77.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "pyroki"
-version = "0.0.0"
+dynamic = ["version"]
 description = "Python Robot Kinematics Library"
 readme = "README.md"
-license = { text="MIT" }
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.10"
+authors = [
+    { name = "Chung Min Kim" },
+    { name = "Brent Yi" },
+]
+keywords = ["robotics", "kinematics", "inverse-kinematics", "optimization", "jax"]
 classifiers = [
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
-    "License :: OSI Approved :: MIT License",
-    "Operating System :: OS Independent"
+    "Operating System :: OS Independent",
+    "Topic :: Scientific/Engineering",
 ]
 dependencies = [
-    "tyro",
     "jax>=0.4.0",
     "jaxlib",
     "jaxlie>=1.0.0",
     "jax_dataclasses>=1.0.0",
     "jaxtyping",
     "loguru",
-    "robot_descriptions",
     "jaxls @ git+https://github.com/brentyi/jaxls.git",
     "yourdfpy",
     "trimesh",
     "viser",
     "pyliblzfse",  # Need for viser.extras import in viser==0.2.23 
 ]
+
+[project.urls]
+Homepage = "https://pyroki-toolkit.github.io/"
+Documentation = "https://chungmin99.github.io/pyroki/"
+Repository = "https://github.com/chungmin99/pyroki"
+Issues = "https://github.com/chungmin99/pyroki/issues"
 
 [project.optional-dependencies]
 dev = [
@@ -41,6 +51,13 @@ dev = [
     "pytest",
     "m2r2",
 ]
+examples = [
+    "tyro",
+    "robot_descriptions",
+]
+
+[tool.setuptools.dynamic]
+version = { attr = "pyroki.__version__" }
 
 [tool.ruff.lint]
 select = [
@@ -61,6 +78,7 @@ ignore = [
     "PLR2004",  # Magic value used in comparison.
     "PLR0915",  # Too many statements.
     "PLR0913",  # Too many arguments.
+    "PLR0917",  # Too many positional arguments.
     "PLC0414",  # Import alias does not rename variable. (this is used for exporting names)
     "PLC1901",  # Use falsey strings.
     "PLR5501",  # Use `elif` instead of `else if`.

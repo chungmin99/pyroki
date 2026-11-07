@@ -24,9 +24,15 @@ Please refer to the [documentation](https://chungmin99.github.io/pyroki/) for mo
 You can install `pyroki` with `pip`, on Python 3.10+:
 
 ```
+pip install pyroki
+```
+
+Or, to install from source for development:
+
+```
 git clone https://github.com/chungmin99/pyroki.git
 cd pyroki
-pip install -e .
+pip install -e ".[dev,examples]"
 ```
 
 ## Status

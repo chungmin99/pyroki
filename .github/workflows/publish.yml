@@ -1,0 +1,91 @@
+name: publish
+
+# Builds the sdist + wheel on every PR/push (to catch packaging regressions early)
+# and uploads to PyPI via trusted publishing when a GitHub release is published.
+#
+# One-time setup on PyPI: add a "pending trusted publisher" for project `pyroki`
+# with owner `chungmin99`, repository `pyroki`, workflow `publish.yml`, and
+# environment `pypi`. Then create a `pypi` environment in the GitHub repo settings.
+#
+# To release: bump `__version__` in `src/pyroki/__init__.py`, merge, then publish
+# a GitHub release tagged `v<version>` (e.g. `v0.1.0`).
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  release:
+    types: [published]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build sdist and wheel
+        run: |
+          pip install build twine
+          python -m build
+
+      - name: Check distribution metadata
+        run: twine check --strict dist/*
+
+      - name: Check that the release tag matches the package version
+        if: github.event_name == 'release'
+        run: |
+          version=$(python -c "import email, glob, zipfile; w = glob.glob('dist/*.whl')[0]; m = [n for n in zipfile.ZipFile(w).namelist() if n.endswith('.dist-info/METADATA')][0]; print(email.message_from_bytes(zipfile.ZipFile(w).read(m))['Version'])")
+          if [ "${GITHUB_REF_NAME#v}" != "$version" ]; then
+            echo "::error::Release tag '$GITHUB_REF_NAME' does not match package version '$version'."
+            exit 1
+          fi
+
+      - name: Check for direct URL dependencies (rejected by PyPI)
+        # PyPI refuses uploads whose metadata contains `pkg @ git+https://...`
+        # requirements, so fail releases here with a clear message instead of at
+        # upload time. On non-release events this only emits a warning.
+        env:
+          IS_RELEASE: ${{ github.event_name == 'release' }}
+        run: |
+          python - <<'EOF'
+          import email, glob, os, sys, zipfile
+          wheel = zipfile.ZipFile(glob.glob("dist/*.whl")[0])
+          name = next(n for n in wheel.namelist() if n.endswith(".dist-info/METADATA"))
+          meta = email.message_from_bytes(wheel.read(name))
+          direct = [r for r in meta.get_all("Requires-Dist") or [] if " @ " in r]
+          is_release = os.environ["IS_RELEASE"] == "true"
+          for r in direct:
+              level = "error" if is_release else "warning"
+              print(f"::{level}::Direct URL dependency not allowed on PyPI: {r}")
+          sys.exit(1 if direct and is_release else 0)
+          EOF
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    if: github.event_name == 'release'
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/pyroki
+    permissions:
+      id-token: write # Required for trusted publishing.
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
